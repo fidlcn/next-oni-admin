@@ -69,8 +69,8 @@ export default function Login() {
       ),
     ])
       .then(async ([keyData]) => {
-        // CSRF token 已通过 Set-Cookie 写入，无需手动存储
-        const key = await importPublicKey(keyData.publicKey);
+        // API 响应格式: { code: 0, data: { publicKey: "..." } }
+        const key = await importPublicKey(keyData.data.publicKey);
         setPublicKey(key);
       })
       .catch(() => {
