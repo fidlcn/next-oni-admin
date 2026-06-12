@@ -1,0 +1,80 @@
+let nextId = 6;
+
+export const mockContents = [
+  {
+    id: 1,
+    title: '使用 React 18 构建高性能后台',
+    content:
+      '<p>本文介绍如何使用 React 18 的新特性来构建高性能的后台管理系统...</p>',
+    categoryId: 3,
+    cover: null,
+    status: 1,
+    authorId: 1,
+    publishedAt: '2025-03-01T10:00:00.000Z',
+    createdAt: '2025-03-01T10:00:00.000Z',
+    updatedAt: '2025-03-01T10:00:00.000Z',
+    author: { id: 1, username: 'admin' },
+    category: { id: 3, name: '前端开发' },
+  },
+  {
+    id: 2,
+    title: 'NestJS 最佳实践指南',
+    content:
+      '<p>NestJS 是一个用于构建高效、可扩展的 Node.js 服务器端应用程序的框架...</p>',
+    categoryId: 4,
+    cover: null,
+    status: 1,
+    authorId: 1,
+    publishedAt: '2025-03-05T14:00:00.000Z',
+    createdAt: '2025-03-05T14:00:00.000Z',
+    updatedAt: '2025-03-05T14:00:00.000Z',
+    author: { id: 1, username: 'admin' },
+    category: { id: 4, name: '后端开发' },
+  },
+  {
+    id: 3,
+    title: '2025 年产品路线图',
+    content: '<p>我们计划在 2025 年推出以下新功能...</p>',
+    categoryId: 2,
+    cover: null,
+    status: 1,
+    authorId: 2,
+    publishedAt: '2025-04-01T09:00:00.000Z',
+    createdAt: '2025-04-01T09:00:00.000Z',
+    updatedAt: '2025-04-01T09:00:00.000Z',
+    author: { id: 2, username: 'editor' },
+    category: { id: 2, name: '产品动态' },
+  },
+  {
+    id: 4,
+    title: 'TypeScript 5.0 新特性一览（草稿）',
+    content: '<p>TypeScript 5.0 带来了许多令人兴奋的新特性...</p>',
+    categoryId: 3,
+    cover: null,
+    status: 0,
+    authorId: 1,
+    publishedAt: null,
+    createdAt: '2025-04-10T16:00:00.000Z',
+    updatedAt: '2025-04-10T16:00:00.000Z',
+    author: { id: 1, username: 'admin' },
+    category: { id: 3, name: '前端开发' },
+  },
+  {
+    id: 5,
+    title: 'MySQL 性能优化实战',
+    content: '<p>在高并发场景下，MySQL 的性能优化至关重要...</p>',
+    categoryId: 4,
+    cover: null,
+    status: 1,
+    authorId: 1,
+    publishedAt: '2025-05-01T11:00:00.000Z',
+    createdAt: '2025-05-01T11:00:00.000Z',
+    updatedAt: '2025-05-01T11:00:00.000Z',
+    author: { id: 1, username: 'admin' },
+    category: { id: 4, name: '后端开发' },
+  },
+];
+
+export function getNextContentId() {
+  return nextId++;
+}

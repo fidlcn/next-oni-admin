@@ -1,0 +1,16 @@
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Ant Design 侧边栏 logo 区域 */
+.ant-layout-sider {
+  border-right: 1px solid #f0f0f0;
+}
