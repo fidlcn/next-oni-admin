@@ -10,6 +10,8 @@ import { Repository, In } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 
 import { User } from '../../entities/user.entity';
 import { RefreshToken } from '../../entities/refresh-token.entity';
@@ -30,14 +32,14 @@ import { CreateUserDto } from './dto/create-user.dto';
  *   刷新时旧 Token 被吊销，生成新 Token（轮换策略）
  *
  * RSA 加密：
- *   服务端启动时生成 2048-bit RSA 密钥对
- *   前端用公钥加密密码，服务端用私钥解密后再 bcrypt.compare
+ *   2048-bit RSA 密钥对持久化到 keys/ 目录，PM2 多实例共享同一份密钥
+ *   首次启动自动生成，后续启动直接加载
  */
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  /** RSA 密钥对 —— 启动时生成，进程生命周期内复用 */
+  /** RSA 密钥对 —— 持久化存储，PM2 多实例共享 */
   private readonly rsaPublicKey: string;
   private readonly rsaPrivateKey: string;
 
@@ -50,21 +52,31 @@ export class AuthService {
     private roleRepo: Repository<Role>,
     private jwtService: JwtService,
   ) {
-    // 启动时生成 RSA 密钥对
-    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: {
-        type: 'spki',
-        format: 'pem',
-      },
-      privateKeyEncoding: {
-        type: 'pkcs8',
-        format: 'pem',
-      },
-    });
-    this.rsaPublicKey = publicKey;
-    this.rsaPrivateKey = privateKey;
-    this.logger.log('RSA 2048-bit 密钥对已生成');
+    // RSA 密钥对：持久化到 keys/ 目录，确保 PM2 cluster 模式下多实例共享
+    const keyDir = path.join(process.cwd(), 'keys');
+    const publicPath = path.join(keyDir, 'rsa_public.pem');
+    const privatePath = path.join(keyDir, 'rsa_private.pem');
+
+    if (fs.existsSync(publicPath) && fs.existsSync(privatePath)) {
+      // 加载已有密钥
+      this.rsaPublicKey = fs.readFileSync(publicPath, 'utf8');
+      this.rsaPrivateKey = fs.readFileSync(privatePath, 'utf8');
+      this.logger.log('RSA 密钥对已从文件加载');
+    } else {
+      // 首次启动：生成新密钥对并保存
+      const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+      this.rsaPublicKey = publicKey;
+      this.rsaPrivateKey = privateKey;
+
+      fs.mkdirSync(keyDir, { recursive: true });
+      fs.writeFileSync(publicPath, publicKey, { mode: 0o644 });
+      fs.writeFileSync(privatePath, privateKey, { mode: 0o600 }); // 仅 owner 可读
+      this.logger.log('RSA 2048-bit 密钥对已生成并保存到 keys/');
+    }
   }
 
   /** 获取 RSA 公钥（PEM 格式），供前端加密密码 */

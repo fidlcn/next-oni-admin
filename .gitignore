@@ -40,6 +40,9 @@ coverage/
 # Uploads — 用户上传的文件不入库
 uploads/
 
+# RSA keys — 运行时生成，每个部署环境独立
+keys/
+
 # Planning files — 只保留在本地
 task_plan.md
 findings.md
