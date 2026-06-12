@@ -2,7 +2,6 @@ import {
   IsString,
   MinLength,
   MaxLength,
-  Matches,
   IsOptional,
   IsEmail,
 } from 'class-validator';
@@ -18,14 +17,8 @@ export class RegisterDto {
   username: string;
 
   @IsString()
-  @MinLength(8, { message: '密码至少 8 位' })
-  @MaxLength(50)
-  @Matches(
-    /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d!@#$%^&*()_+\-=[\]{};:'",.<>?/\\|`~]{8,}$/,
-    {
-      message: '密码必须包含字母和数字',
-    },
-  )
+  @MinLength(8)
+  @MaxLength(1024, { message: '密码格式错误' })
   password: string;
 
   @IsOptional()
