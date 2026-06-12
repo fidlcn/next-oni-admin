@@ -37,6 +37,15 @@ export const {
   size: 64,
   ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
   getSessionIdentifier: () => 'session',
+  // 跳过认证端点的 CSRF 校验 —— 这些端点在用户尚未持有 CSRF cookie 时就需要工作
+  skipCsrfProtection: (req) => {
+    const path = req.path || req.url;
+    return (
+      path === '/v1/auth/login' ||
+      path === '/v1/auth/refresh' ||
+      path === '/v1/auth/register'
+    );
+  },
 });
 
 async function bootstrap() {
