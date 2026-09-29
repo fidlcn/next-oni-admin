@@ -146,10 +146,42 @@ bash deploy/deploy.sh
 ```
 浏览器 → Nginx (SSL)
           ├── www.example.com    → Next.js SSR (:3001)
-          │   └── /v1/*          → NestJS API (:3000)
+          │   ├── /v1/*          → NestJS API (:3000)
+          │   └── /p/*           → 托管页静态文件（AI 生成的 HTML，CSP 禁脚本）
           └── admin.example.com  → React SPA (静态文件)
               └── /v1/*          → NestJS API (:3000)
 ```
+
+### 🧩 托管页生成（pagegen）
+
+一个「H5 表单 → GLM 生成单文件 HTML → 静态托管」的功能，入口在主站：
+
+- **`/gen`**（主站）— 填标题/主题标签/风格/正文/访问口令，30-60 秒生成一个自包含网页；完成页提供链接、复制、二维码，本设备保留「最近生成」
+- **`/pages`**（主站）— 公开目录页，按 12 个主题标签筛选 + 标题搜索 + 最新/热门排序
+- **`/p/{pageId}.html`** — 生成页的唯一出口（`apps/server/pages/` 扁平目录，nginx 托管，CSP `default-src 'none'` 彻底禁脚本 + noindex + DENY 嵌 frame）
+- **管理端「托管页管理」** — 统计卡片（今日生成/失败率/费用估算/磁盘占用）、列表（标签/状态/浏览数/IP/提示词）、查看/删除、CSV 导出（含公式注入防护）
+
+安全与合规要点：
+
+| 机制       | 说明                                                                        |
+| ---------- | --------------------------------------------------------------------------- |
+| 口令准入   | `PAGEGEN_ACCESS_CODE`（≥16 位随机串）+ 每 IP 当日失败 20 次锁定             |
+| 频控       | 每 IP 每天 10 次、全局每天 200 次（全局与 IP 无关，是费用兜底）             |
+| 生成期间锁 | 该 IP 有进行中任务时提交接口直接拒绝（前端禁用 + 后端强制）                 |
+| 敏感词预检 | 内置硬词表 + `PAGEGEN_SENSITIVE_EXTRA` 追加，命中即拒                       |
+| 消毒 + CSP | sanitize-html 白名单（剥 script/iframe/表单/事件属性）+ nginx CSP 双保险    |
+| 密钥       | GLM key 仅存服务器 `.env`（600 权限，不入库）；换 key 改配置重启即可        |
+| 禁联网     | 系统提示词硬约束（禁外链资源/禁编造来源）；`PAGEGEN_WEB_SEARCH=true` 可放开 |
+
+部署检查（pagegen 相关）：
+
+1. `deploy/nginx.conf` 已含 `/p/` 块；生成目录 `apps/server/pages/` 需运行用户可写
+2. `PAGEGEN_PUBLIC_BASE_URL` 必须配主站绝对地址（如 `https://www.example.com/p`），管理端跨域跳转依赖它
+3. **云安全组只放行 80/443/22**：3000/3001 对公网开放会被直连伪造 `X-Real-IP` 绕过 per-IP 频控（验收：`curl -I http://服务器IP:3000` 必须超时/拒绝）
+4. `deploy/backup.sh` 已将 `pages/` 目录纳入每日备份（生成页丢失不可再生）
+5. 验证响应头：`curl -sI https://www.example.com/p/某pageId.html` 应包含 CSP / X-Frame-Options: DENY / X-Robots-Tag: noindex
+
+v2 候选：联网搜索放开（含引用来源页脚）、带反馈改写、图片上传、JS 交互页、自动过期、SSM 托管密钥、自定义 slug。
 
 ### 📄 License
 
