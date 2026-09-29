@@ -11,6 +11,7 @@ import {
   MenuUnfoldOutlined,
   FileTextOutlined,
   PictureOutlined,
+  FileDoneOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth';
@@ -59,6 +60,11 @@ export default function AdminLayout() {
           key: '/admin/media',
           icon: <PictureOutlined />,
           label: '媒体库',
+        },
+        {
+          key: '/admin/hosted-pages',
+          icon: <FileDoneOutlined />,
+          label: '托管页管理',
         },
       ],
     },
