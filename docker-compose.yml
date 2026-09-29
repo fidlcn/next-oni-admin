@@ -1,0 +1,81 @@
+# Next Oni Admin — 本地 Docker 部署
+# 用法：
+#   cp .env.example .env   # 填入随机密钥（compose 自动读取根目录 .env）
+#   docker compose up -d --build   构建并启动
+#   docker compose logs -f app     查看应用日志
+#   docker compose down            停止（数据保留在卷中）
+#
+# 端口：
+#   8080 → 管理后台 SPA + /v1 API（Nginx 统一入口）
+#   3000 → NestJS API 直连（Swagger: /api-docs）
+#   3001 → Next.js 主站
+#
+# MySQL 未暴露到宿主机，仅容器网络内可达。
+
+name: oni-admin
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: oni-admin:latest
+    container_name: oni-admin
+    ports:
+      - "8080:80"
+      - "3000:3000"
+      - "3001:3001"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USERNAME: oni
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_DATABASE: next_oni_admin
+      APP_PORT: "3000"
+      APP_PREFIX: /v1
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRY: 2h
+      JWT_REFRESH_EXPIRY: 7d
+      CSRF_SECRET: ${CSRF_SECRET}
+      CORS_ORIGIN: http://localhost:8080,http://localhost:3000,http://localhost:3001
+      # ===== 托管页生成（pagegen）=====
+      # GLM API Key —— 在 .env 里配置；留空则生成功能不可用
+      GLM_API_KEY: ${GLM_API_KEY:-}
+      GLM_MODEL: glm-5.3
+      # 提交口令（openssl rand -hex 16 生成），在 /gen 表单页输入
+      PAGEGEN_ACCESS_CODE: ${PAGEGEN_ACCESS_CODE}
+      PAGEGEN_PUBLIC_BASE_URL: /p
+    volumes:
+      - uploads:/app/apps/server/uploads
+      - rsa-keys:/app/apps/server/keys
+      # 托管页（AI 生成 HTML）—— 由容器内 nginx 以 /p/ 暴露
+      - pages:/app/apps/server/pages
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8
+    container_name: oni-admin-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: next_oni_admin
+      MYSQL_USER: oni
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uoni", "-p${DB_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  uploads:
+  rsa-keys:
+  pages:

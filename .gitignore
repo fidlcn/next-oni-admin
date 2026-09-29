@@ -18,6 +18,7 @@ dist/
 .vscode/
 .idea/
 .cursor/
+.zcode/
 *.swp
 *.swo
 
