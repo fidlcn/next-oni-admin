@@ -1,1 +1,229 @@
 @import "tailwindcss";
+
+/* ===== 终端启动页（移植自 fidlcn-homepages/04-terminal.html）===== */
+
+.terminal-stage {
+  --term-green: #3dff7c;
+  --term-green-dim: rgba(61, 255, 124, 0.55);
+  --term-bg: #020803;
+}
+
+/* CRT 质感层（absolute 挂在 fixed 舞台内） */
+.terminal-stage .scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.28) 0 1px,
+    transparent 1px 3px
+  );
+}
+.terminal-stage .vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 58%,
+    rgba(0, 0, 0, 0.82)
+  );
+}
+.terminal-stage .glowbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 120px;
+  z-index: 6;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    rgba(61, 255, 124, 0.05),
+    transparent
+  );
+  animation: term-sweep 7s linear infinite;
+}
+@keyframes term-sweep {
+  from {
+    top: -15%;
+  }
+  to {
+    top: 110%;
+  }
+}
+
+.terminal-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 6vh 7vw;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: clamp(11px, 1.5vw, 15px);
+  line-height: 1.85;
+  color: var(--term-green);
+  text-shadow: 0 0 7px rgba(61, 255, 124, 0.75);
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.term-line {
+  display: block;
+  min-height: 1.85em;
+}
+.term-line.dim {
+  color: var(--term-green-dim);
+}
+.term-banner {
+  font-size: clamp(5px, 1.15vw, 13px);
+  line-height: 1.28;
+  color: #eaffe9;
+  text-shadow:
+    0 0 10px rgba(61, 255, 124, 0.9),
+    0 0 34px rgba(61, 255, 124, 0.4);
+  animation: term-banner-pulse 3.2s ease-in-out infinite;
+  white-space: pre;
+  overflow-x: auto;
+}
+@keyframes term-banner-pulse {
+  50% {
+    filter: brightness(1.28);
+  }
+}
+.term-prompt {
+  color: #fff;
+}
+.term-caret {
+  display: inline-block;
+  width: 0.62em;
+  height: 1.15em;
+  vertical-align: -0.18em;
+  background: var(--term-green);
+  box-shadow: 0 0 10px rgba(61, 255, 124, 0.9);
+  animation: term-blink 1s steps(1) infinite;
+}
+@keyframes term-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* 提示符输入框（承载彩蛋指令） */
+.term-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--term-green);
+  font: inherit;
+  text-shadow: inherit;
+  caret-color: transparent;
+  min-width: 8ch;
+  width: 12ch;
+}
+
+.term-replay {
+  position: absolute;
+  right: 26px;
+  bottom: 22px;
+  z-index: 8;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--term-green-dim);
+  border: 1px solid rgba(61, 255, 124, 0.3);
+  padding: 8px 16px;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.4s,
+    color 0.2s,
+    border-color 0.2s;
+  pointer-events: none;
+}
+.term-replay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.term-replay:hover {
+  color: #fff;
+  border-color: rgba(61, 255, 124, 0.8);
+}
+
+/* 进入主页面按钮（H5 主入口，PC 也可点） */
+.term-enter {
+  position: absolute;
+  left: 7vw;
+  bottom: 6vh;
+  z-index: 8;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: var(--term-green);
+  border: 1px solid rgba(61, 255, 124, 0.45);
+  padding: 12px 22px;
+  background: rgba(61, 255, 124, 0.04);
+  cursor: pointer;
+  text-shadow: 0 0 7px rgba(61, 255, 124, 0.75);
+  animation: term-enter-breathe 2.6s ease-in-out infinite;
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+.term-enter.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.term-enter:hover {
+  background: rgba(61, 255, 124, 0.12);
+  color: #fff;
+}
+@keyframes term-enter-breathe {
+  50% {
+    box-shadow: 0 0 22px rgba(61, 255, 124, 0.35);
+  }
+}
+
+/* ===== 主页质感纹理 ===== */
+.dotgrid {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(0, 0, 0, 0.08) 1px,
+    transparent 0
+  );
+  background-size: 26px 26px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 35%, transparent 100%);
+  -webkit-mask-image: radial-gradient(
+    ellipse 90% 70% at 50% 0%,
+    black 35%,
+    transparent 100%
+  );
+}
+
+@keyframes home-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.home-caret {
+  display: inline-block;
+  width: 0.14em;
+  height: 0.86em;
+  margin-left: 0.08em;
+  background: #3dff7c;
+  box-shadow: 0 0 14px rgba(61, 255, 124, 0.8);
+  animation: home-caret-blink 1.2s steps(1) infinite;
+}
+
+@keyframes home-dot-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.home-dot {
+  animation: home-dot-pulse 2s ease-in-out infinite;
+}
+
