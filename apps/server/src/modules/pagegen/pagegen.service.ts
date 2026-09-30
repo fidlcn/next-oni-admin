@@ -477,6 +477,13 @@ export class PagegenService implements OnModuleInit {
       cost: Math.round(cost * 10000) / 10000,
       diskBytes,
       fileCount,
+      // 主站 /gen 生成页地址：由 PAGEGEN_PUBLIC_BASE_URL（如 https://www.fidlcn.site/p）
+      // 推导主站 origin，管理端「去生成页」跳转用它，前端不再写死域名
+      genUrl: `${(
+        this.configService.get<string>('PAGEGEN_PUBLIC_BASE_URL', '/p') || '/p'
+      )
+        .replace(/\/+$/, '')
+        .replace(/\/p$/, '')}/gen`,
     };
   }
 

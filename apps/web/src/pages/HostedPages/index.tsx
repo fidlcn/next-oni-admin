@@ -24,6 +24,7 @@ import {
   HddOutlined,
   LinkOutlined,
   FormOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import {
   getHostedPages,
@@ -45,15 +46,27 @@ function formatBytes(bytes: number): string {
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
+/** tokens 数值紧凑化：12345 -> 1.2万 */
+function formatTokens(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
+  return String(n);
+}
+
+/** 统计卡片的小号后缀（与数值字号区分，避免撑高卡片） */
+function suffix(text: string) {
+  return <span style={{ fontSize: 12, color: '#8c8c8c' }}>{text}</span>;
+}
+
 /**
  * 托管页管理 —— 公开 H5 提交生成的 HTML 页面托管在此
  * 顶部统计卡片（今日生成/失败率/费用估算/磁盘占用）+ 列表（提示词查看/跳转/删除）
  */
 
-/** 主站 /gen 生成页地址；生产构建时通过 VITE_GEN_URL 覆盖为线上主站域名 */
-const GEN_PAGE_URL =
-  (import.meta.env.VITE_GEN_URL as string | undefined) ||
-  'http://localhost:3001/gen';
+/**
+ * 主站 /gen 生成页地址：优先用后端 stats 下发的 genUrl（来自
+ * PAGEGEN_PUBLIC_BASE_URL，生产为线上主站域名）；仅本地开发兜底 3001
+ */
+const DEV_GEN_URL = 'http://localhost:3001/gen';
 export default function HostedPages() {
   const [list, setList] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -208,7 +221,15 @@ export default function HostedPages() {
           />
           <Button
             icon={<FormOutlined />}
-            onClick={() => window.open(GEN_PAGE_URL, '_blank')}
+            onClick={() =>
+              window.open(
+                typeof stats?.genUrl === 'string' &&
+                  stats.genUrl.startsWith('http')
+                  ? stats.genUrl
+                  : DEV_GEN_URL,
+                '_blank',
+              )
+            }
           >
             去生成页
           </Button>
@@ -218,46 +239,67 @@ export default function HostedPages() {
         </Space>
       </div>
 
-      {/* 统计卡片 */}
+      {/* 统计卡片 —— 五张等高：数值 22px，后缀统一 12px 小字 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} xl={8}>
           <Card>
             <Statistic
               title="今日生成"
               value={stats?.todayCount ?? 0}
-              suffix={`/ 总 ${stats?.totalCount ?? 0} 页`}
+              suffix={suffix(`/ 总 ${stats?.totalCount ?? 0} 页`)}
               prefix={<FileDoneOutlined />}
+              valueStyle={{ fontSize: 22 }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} xl={8}>
           <Card>
             <Statistic
               title="失败率"
               value={((stats?.failRate ?? 0) * 100).toFixed(1)}
-              suffix={`%（${stats?.failedCount ?? 0} 次）`}
+              suffix={suffix(`% / ${stats?.failedCount ?? 0} 次`)}
               prefix={<WarningOutlined />}
+              valueStyle={{ fontSize: 22 }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} xl={8}>
+          <Card>
+            <Statistic
+              title="Tokens 消耗"
+              value={formatTokens(
+                (stats?.tokensIn ?? 0) + (stats?.tokensOut ?? 0),
+              )}
+              suffix={suffix(
+                `入 ${formatTokens(stats?.tokensIn ?? 0)} · 出 ${formatTokens(
+                  stats?.tokensOut ?? 0,
+                )}`,
+              )}
+              prefix={<ThunderboltOutlined />}
+              valueStyle={{ fontSize: 22 }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} xl={8}>
           <Card>
             <Statistic
               title="费用估算"
               value={stats?.cost ?? 0}
               precision={2}
+              suffix={suffix('元')}
               prefix={<PayCircleOutlined />}
-              suffix={`元（${stats?.tokensIn ?? 0} 入 / ${stats?.tokensOut ?? 0} 出 tokens）`}
+              valueStyle={{ fontSize: 22 }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={24} sm={12} xl={8}>
           <Card>
             <Statistic
               title="磁盘占用"
               value={formatBytes(stats?.diskBytes ?? 0)}
-              suffix={`/ ${stats?.fileCount ?? 0} 个文件`}
+              suffix={suffix(`/ ${stats?.fileCount ?? 0} 个文件`)}
               prefix={<HddOutlined />}
+              valueStyle={{ fontSize: 22 }}
             />
           </Card>
         </Col>
