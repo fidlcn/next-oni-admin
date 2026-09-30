@@ -1,7 +1,13 @@
-import { extractHtml, GlmService } from '../services/glm.service';
 import { ConfigService } from '@nestjs/config';
 
-describe('GlmService', () => {
+import {
+  extractHtml,
+  extractMeta,
+  pickValidTags,
+  GlmService,
+} from '../services/glm.service';
+
+describe('GlmService 纯函数', () => {
   describe('extractHtml（围栏剥离）', () => {
     it('纯 HTML 直接返回', () => {
       const doc = '<!DOCTYPE html><html><body>x</body></html>';
@@ -14,13 +20,12 @@ describe('GlmService', () => {
       expect(out).toBe(doc);
     });
 
-    it('从前后解释文字中截取 html 文档', () => {
-      const out = extractHtml(
-        '好的，以下是页面：\n<html lang="zh"><body>y</body></html>\n希望你喜欢',
+    it('元数据注释在文档前时，HTML 提取不受影响', () => {
+      const raw =
+        '<!--pagegen:{"title":"咖啡页","tags":["business"]}-->\n<!DOCTYPE html><html><body>y</body></html>';
+      expect(extractHtml(raw)).toBe(
+        '<!DOCTYPE html><html><body>y</body></html>',
       );
-      expect(out).toMatch(/^<html lang="zh">/i);
-      expect(out).toMatch(/<\/html>$/i);
-      expect(out).not.toContain('好的');
     });
 
     it('无有效 HTML 时抛错', () => {
@@ -29,26 +34,84 @@ describe('GlmService', () => {
     });
   });
 
-  describe('buildMessages（禁联网系统提示词）', () => {
-    it('系统提示词包含禁联网硬约束，用户消息包含标题/标签/风格指令', () => {
-      const service = new GlmService(new ConfigService());
-      const messages = service.buildMessages({
-        title: '咖啡推广页',
-        tags: ['business'],
-        style: 'lively',
-        content: '新品咖啡豆上市',
+  describe('extractMeta（元数据注释解析）', () => {
+    it('解析 title 与 tags', () => {
+      const raw =
+        '<!--pagegen:{"title":"新品咖啡豆","tags":["business","food"]}-->\n<!DOCTYPE html><html></html>';
+      expect(extractMeta(raw)).toEqual({
+        title: '新品咖啡豆',
+        tags: ['business', 'food'],
       });
-
-      expect(messages[0].role).toBe('system');
-      expect(messages[0].content).toContain('禁止联网');
-      expect(messages[0].content).toContain('CDN');
-      expect(messages[0].content).toContain('禁止 <script>');
-
-      const user = messages[1].content;
-      expect(user).toContain('咖啡推广页');
-      expect(user).toContain('商业');
-      expect(user).toContain('活泼');
-      expect(user).toContain('新品咖啡豆上市');
     });
+
+    it('缺失注释返回空对象', () => {
+      expect(extractMeta('<!DOCTYPE html><html></html>')).toEqual({});
+    });
+
+    it('非法 JSON 返回空对象（不抛错）', () => {
+      expect(extractMeta('<!--pagegen:{oops}-->')).toEqual({});
+    });
+  });
+
+  describe('pickValidTags（AI 标签白名单校验）', () => {
+    it('过滤白名单外的值并去重', () => {
+      expect(pickValidTags(['code', 'invalid', 'code', 'life'])).toEqual([
+        'code',
+        'life',
+      ]);
+    });
+
+    it('超过上限截断为 3 个', () => {
+      expect(pickValidTags(['code', 'life', 'work', 'study'])).toEqual([
+        'code',
+        'life',
+        'work',
+      ]);
+    });
+
+    it('全无效/非数组时兜底为创意实验', () => {
+      expect(pickValidTags(['hack', 42])).toEqual(['fun']);
+      expect(pickValidTags(undefined)).toEqual(['fun']);
+    });
+  });
+});
+
+describe('GlmService buildMessages', () => {
+  const service = new GlmService(new ConfigService());
+
+  it('系统提示词含禁联网/移动端硬约束/元数据注释格式与标签范围', () => {
+    const [sys] = service.buildMessages({
+      title: '',
+      tags: [],
+      style: 'minimal',
+      content: 'x',
+    }) as any[];
+    expect(sys.content).toContain('禁止联网');
+    expect(sys.content).toContain('移动端优先');
+    expect(sys.content).toContain('<!--pagegen:');
+    expect(sys.content).toContain('code=编程');
+    expect(sys.content).toContain('people=人物');
+  });
+
+  it('用户消息：有标题用标题，无标题提示自拟；含风格指令与正文', () => {
+    const withTitle = service.buildMessages({
+      title: '咖啡推广页',
+      tags: ['business'],
+      style: 'lively',
+      content: '新品咖啡豆上市',
+    }) as any[];
+    expect(withTitle[1].content).toContain('页面标题：咖啡推广页');
+    expect(withTitle[1].content).toContain('主题标签：business');
+    expect(withTitle[1].content).toContain('活泼');
+    expect(withTitle[1].content).toContain('新品咖啡豆上市');
+
+    const noTitle = service.buildMessages({
+      title: '',
+      tags: [],
+      style: 'minimal',
+      content: '写个页面',
+    }) as any[];
+    expect(noTitle[1].content).toContain('自拟');
+    expect(noTitle[1].content).toContain('预设范围');
   });
 });

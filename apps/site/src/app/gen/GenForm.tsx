@@ -23,7 +23,6 @@ interface RecentItem {
 
 const CODE_KEY = 'pagegen:code';
 const RECENT_KEY = 'pagegen:recent';
-const MAX_TAGS = 3;
 
 /** 时间驱动的阶段文案（真实进度 API 不存在，用已等待时长模拟） */
 function stageText(seconds: number): string {
@@ -34,10 +33,12 @@ function stageText(seconds: number): string {
   return '即将完成，请稍候…';
 }
 
+/**
+ * 生成表单 —— 尽量精简：风格 + 内容 + 口令三字段。
+ * 标题与标签由 AI 决定：标题自拟（元数据注释回传），标签在预设范围内挑选。
+ */
 export default function GenForm() {
-  const [title, setTitle] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
-  const [style, setStyle] = useState<string>('minimal');
+  const [style, setStyle] = useState<string>('auto');
   const [content, setContent] = useState('');
   const [accessCode, setAccessCode] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -63,17 +64,15 @@ export default function GenForm() {
     }
   }, []);
 
-  // 正文 placeholder 轮播（选中标签后固定为该标签示例）
+  // 正文 placeholder 示例轮播
   useEffect(() => {
-    if (tags.length > 0) return;
     const timer = setInterval(() => setPlaceholderIdx((i) => i + 1), 4000);
     return () => clearInterval(timer);
-  }, [tags.length]);
+  }, []);
 
-  const selectedTagDef = PAGEGEN_TAGS.find((t) => t.value === tags[0]);
-  const placeholder = selectedTagDef
-    ? `示例：${selectedTagDef.example}`
-    : `示例：${PAGEGEN_TAGS[placeholderIdx % PAGEGEN_TAGS.length].example}`;
+  const placeholder = `描述你想要的页面，越具体越好，例如：${
+    PAGEGEN_TAGS[placeholderIdx % PAGEGEN_TAGS.length].example
+  }`;
 
   // 轮询任务状态
   useEffect(() => {
@@ -84,7 +83,12 @@ export default function GenForm() {
 
     const poll = setInterval(async () => {
       try {
-        const data = await api(`/v1/pagegen/status/${pageId}`);
+        const data = await api<{
+          status: string;
+          title?: string;
+          error?: string;
+          url?: string;
+        }>(`/v1/pagegen/status/${pageId}`);
         if (data.status === 'done' && data.url) {
           const abs = new URL(data.url, window.location.origin).toString();
           setResultUrl(abs);
@@ -93,7 +97,7 @@ export default function GenForm() {
           QRCode.toDataURL(abs, { width: 220, margin: 1 })
             .then(setQrDataUrl)
             .catch(() => {});
-          updateRecent(pageId, 'done');
+          updateRecent(pageId, 'done', data.title);
         } else if (data.status === 'failed') {
           setError(data.error || '生成失败，请调整描述后重试');
           setPhase('failed');
@@ -119,29 +123,26 @@ export default function GenForm() {
     };
   }, [phase, pageId]);
 
-  function updateRecent(id: string, status: string) {
-    setRecents((prev) => {
-      const entry: RecentItem = {
-        pageId: id,
-        title: title || '未命名页面',
-        status,
-        createdAt: Date.now(),
-      };
-      const next = [entry, ...prev.filter((r) => r.pageId !== id)].slice(0, 20);
-      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-      return next;
-    });
+  function saveRecents(next: RecentItem[]) {
+    setRecents(next);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
   }
 
-  /** 只更新既有条目的状态（恢复轮询用，不动标题与时间） */
-  function patchRecentStatus(id: string, status: string) {
-    setRecents((prev) => {
-      if (!prev.some((r) => r.pageId === id && r.status !== status))
-        return prev;
-      const next = prev.map((r) => (r.pageId === id ? { ...r, status } : r));
-      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-      return next;
-    });
+  /** 新增/更新一条最近记录（status 必填；title 缺省沿用旧值或占位文案） */
+  function updateRecent(id: string, status: string, newTitle?: string) {
+    const prev = recents;
+    const existing = prev.find((r) => r.pageId === id);
+    saveRecents(
+      [
+        {
+          pageId: id,
+          title: newTitle || existing?.title || '生成中…',
+          status,
+          createdAt: existing?.createdAt ?? Date.now(),
+        },
+        ...prev.filter((r) => r.pageId !== id),
+      ].slice(0, 20),
+    );
   }
 
   // 恢复轮询：刷新/杀后台重开后，「最近生成」里未到终态的任务自动续上轮询。
@@ -157,11 +158,13 @@ export default function GenForm() {
       if (stopped || document.hidden) return;
       for (const item of stale) {
         try {
-          const data = await api(`/v1/pagegen/status/${item.pageId}`);
-          if (data.status === 'done' && data.url) {
-            patchRecentStatus(item.pageId, 'done');
-          } else if (data.status === 'failed') {
-            patchRecentStatus(item.pageId, 'failed');
+          const data = await api<{
+            status: string;
+            title?: string;
+            url?: string;
+          }>(`/v1/pagegen/status/${item.pageId}`);
+          if (data.status === 'done' || data.status === 'failed') {
+            updateRecent(item.pageId, data.status, data.title);
           }
         } catch {
           // 网络抖动忽略
@@ -184,21 +187,11 @@ export default function GenForm() {
     };
   }, [recents, phase]);
 
-  const toggleTag = (value: string) => {
-    setTags((prev) => {
-      if (prev.includes(value)) return prev.filter((t) => t !== value);
-      if (prev.length >= MAX_TAGS) return prev;
-      return [...prev, value];
-    });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!title.trim()) return setError('请填写页面标题');
-    if (tags.length < 1) return setError('请至少选择 1 个标签');
-    if (!content.trim()) return setError('请填写页面内容');
+    if (!content.trim()) return setError('请描述你想要的页面内容');
     if (!accessCode.trim()) return setError('请填写访问口令');
 
     setSubmitting(true);
@@ -207,8 +200,6 @@ export default function GenForm() {
       const data = await api<{ pageId: string }>('/v1/pagegen/submit', {
         method: 'POST',
         body: JSON.stringify({
-          title: title.trim(),
-          tags,
           style,
           content: content.trim(),
           accessCode: accessCode.trim(),
@@ -243,58 +234,13 @@ export default function GenForm() {
         onSubmit={handleSubmit}
         className="space-y-5 rounded-2xl border border-gray-200 bg-white p-6"
       >
-        {/* 标题 */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            页面标题
-          </label>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={100}
-            disabled={generating}
-            placeholder="如：新品咖啡豆推广页"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 disabled:bg-gray-50"
-          />
-        </div>
-
-        {/* 标签多选 */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            主题标签{' '}
-            <span className="font-normal text-gray-400">
-              （选 1-{MAX_TAGS} 个）
-            </span>
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {PAGEGEN_TAGS.map((t) => {
-              const active = tags.includes(t.value);
-              const disabled =
-                generating || (!active && tags.length >= MAX_TAGS);
-              return (
-                <button
-                  key={t.value}
-                  type="button"
-                  title={t.desc}
-                  disabled={disabled}
-                  onClick={() => toggleTag(t.value)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                    active
-                      ? 'border-gray-900 bg-gray-900 text-white'
-                      : 'border-gray-300 text-gray-600 hover:border-gray-500 disabled:opacity-40'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* 风格 */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            设计风格
+            设计风格{' '}
+            <span className="font-normal text-gray-400">
+              （标题和标签由 AI 帮你定）
+            </span>
           </label>
           <div className="flex flex-wrap gap-2">
             {PAGEGEN_STYLES.map((s) => {
@@ -323,7 +269,7 @@ export default function GenForm() {
           <label className="mb-1.5 block text-sm font-medium text-gray-700">
             页面内容{' '}
             <span className="font-normal text-gray-400">
-              （写得越具体，效果越好，{2000} 字以内）
+              （写得越具体，效果越好，2000 字以内）
             </span>
           </label>
           <textarea
@@ -424,7 +370,7 @@ export default function GenForm() {
                 </Link>
               </div>
               <p className="text-xs text-gray-400">
-                想要新的一页？修改表单后可再次生成（每 IP 每天有限额）。
+                想要新的一页？修改描述后可再次生成（每 IP 每天有限额）。
               </p>
             </div>
             {qrDataUrl && (

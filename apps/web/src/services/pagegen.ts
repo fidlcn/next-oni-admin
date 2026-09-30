@@ -34,6 +34,7 @@ export const PAGEGEN_TAG_LABELS: Record<string, string> = {
 };
 
 export const PAGEGEN_STYLE_LABELS: Record<string, string> = {
+  auto: '默认',
   minimal: '简约',
   business: '商务',
   lively: '活泼',

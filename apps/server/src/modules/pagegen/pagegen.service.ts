@@ -21,8 +21,9 @@ import {
   AdminListPagegenDto,
   PublicListPagegenDto,
 } from './dto/list-query.dto';
-import { GlmService } from './services/glm.service';
+import { GlmService, pickValidTags } from './services/glm.service';
 import { SanitizeService } from './services/sanitize.service';
+import { parseDeviceMeta } from './device-meta';
 import {
   PAGEGEN_STATUS,
   PAGEGEN_PAGE_ID_RE,
@@ -117,6 +118,7 @@ export class PagegenService implements OnModuleInit {
   async submit(
     dto: SubmitPagegenDto,
     ip: string,
+    userAgent?: string,
   ): Promise<{ pageId: string; status: string }> {
     // 1. 口令（timingSafeEqual，先查失败锁定）
     const failKey = `${todayKey()}:${ip}`;
@@ -181,8 +183,8 @@ export class PagegenService implements OnModuleInit {
       );
     }
 
-    // 5. 落库（pageId 撞车重试 3 次）
-    const record = await this.createRecord(dto, ip);
+    // 5. 落库（pageId 撞车重试 3 次），同步记录 UA 解析出的设备特征
+    const record = await this.createRecord(dto, ip, userAgent);
 
     // 6. 入队异步生成，立即返回
     this.enqueue(record.id);
@@ -209,17 +211,21 @@ export class PagegenService implements OnModuleInit {
   private async createRecord(
     dto: SubmitPagegenDto,
     ip: string,
+    userAgent?: string,
   ): Promise<PagegenRecord> {
+    const device = parseDeviceMeta(userAgent);
     for (let i = 0; i < 3; i++) {
       const record = new PagegenRecord();
       Object.assign(record, {
         pageId: genPageId(),
-        title: dto.title,
-        tags: dto.tags,
+        // 标题/标签可为空 —— 空则由 AI 生成时决定（process 里回填）
+        title: dto.title?.trim() || '',
+        tags: dto.tags && dto.tags.length > 0 ? dto.tags : [],
         style: dto.style,
         content: dto.content,
         status: PAGEGEN_STATUS.PENDING,
         ip,
+        ...device,
       });
       try {
         return await this.repo.save(record);
@@ -274,10 +280,16 @@ export class PagegenService implements OnModuleInit {
         content: record.content,
       });
 
+      // 标题/标签：用户提供了就用用户的，否则用 AI 的（标题兜底"未命名页面"，
+      // 标签经白名单校验、全无效兜底"创意实验"）
+      const finalTitle = record.title || result.title?.trim() || '未命名页面';
+      const finalTags =
+        record.tags.length > 0 ? record.tags : pickValidTags(result.tags);
+
       const html = this.sanitizeService.sanitize(result.html);
       const finalHtml = this.sanitizeService.finalize(
         html,
-        record.title,
+        finalTitle,
         record.content,
       );
       this.writeAtomic(this.pageFilePath(record.pageId), finalHtml);
@@ -288,9 +300,11 @@ export class PagegenService implements OnModuleInit {
         model: result.model,
         tokensIn: result.tokensIn,
         tokensOut: result.tokensOut,
+        title: finalTitle,
+        tags: finalTags,
       });
       this.logger.log(
-        `页面生成完成 pageId=${record.pageId} tokens=${result.tokensIn}/${result.tokensOut}`,
+        `页面生成完成 pageId=${record.pageId} title=${finalTitle} tags=${finalTags.join('/')} tokens=${result.tokensIn}/${result.tokensOut}`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -357,6 +371,8 @@ export class PagegenService implements OnModuleInit {
 
     return {
       status: record.status,
+      // AI 定题后回填的最终标题（H5「最近生成」展示用）
+      title: record.title,
       error: record.error,
       url:
         record.status === PAGEGEN_STATUS.DONE
@@ -502,6 +518,10 @@ export class PagegenService implements OnModuleInit {
       '状态',
       '生成时间',
       'IP',
+      '设备类型',
+      '浏览器',
+      '操作系统',
+      '机型',
       '模型',
       '输入tokens',
       '输出tokens',
@@ -517,6 +537,10 @@ export class PagegenService implements OnModuleInit {
         r.status,
         new Date(r.createdAt).toISOString(),
         r.ip || '',
+        r.deviceType || '',
+        r.browser || '',
+        r.os || '',
+        r.deviceModel || '',
         r.model || '',
         String(r.tokensIn),
         String(r.tokensOut),

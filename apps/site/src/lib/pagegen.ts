@@ -88,6 +88,7 @@ export const PAGEGEN_TAGS: PagegenTagDef[] = [
 ];
 
 export const PAGEGEN_STYLES = [
+  { value: 'auto', label: '默认' },
   { value: 'minimal', label: '简约' },
   { value: 'business', label: '商务' },
   { value: 'lively', label: '活泼' },
