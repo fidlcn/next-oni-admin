@@ -23,6 +23,7 @@ import {
   WarningOutlined,
   PayCircleOutlined,
   HddOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import {
   getHostedPages,
@@ -97,7 +98,19 @@ export default function HostedPages() {
 
   const columns = [
     { title: '标题', dataIndex: 'title', ellipsis: true },
-    { title: 'pageId', dataIndex: 'pageId', width: 130 },
+    {
+      title: 'pageId',
+      dataIndex: 'pageId',
+      width: 150,
+      render: (v: string, record: any) =>
+        record.url ? (
+          <a href={record.url} target="_blank" rel="noreferrer">
+            <LinkOutlined /> {v}
+          </a>
+        ) : (
+          v
+        ),
+    },
     {
       title: '标签',
       dataIndex: 'tags',
@@ -281,6 +294,15 @@ export default function HostedPages() {
             <Descriptions.Item label="标题">{detail.title}</Descriptions.Item>
             <Descriptions.Item label="风格">
               {PAGEGEN_STYLE_LABELS[detail.style] || detail.style}
+            </Descriptions.Item>
+            <Descriptions.Item label="pageId" span={2}>
+              {detail.url ? (
+                <a href={detail.url} target="_blank" rel="noreferrer">
+                  <LinkOutlined /> {detail.url}
+                </a>
+              ) : (
+                detail.pageId
+              )}
             </Descriptions.Item>
             <Descriptions.Item label="标签" span={2}>
               {(detail.tags || []).map((t: string) => (
