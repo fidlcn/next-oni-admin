@@ -43,8 +43,6 @@ export class PagegenService implements OnModuleInit {
   /** 待处理任务队列（记录 id） */
   private queue: number[] = [];
   private processing = false;
-  /** 任务重试计数（内存，崩溃由启动清扫兜底为 failed） */
-  private attempts = new Map<number, number>();
   /** 口令失败计数：key = `yyyymmdd:ip`，当日累计 */
   private codeFails = new Map<string, number>();
 
@@ -76,11 +74,42 @@ export class PagegenService implements OnModuleInit {
 
     // 对账：清理库内无记录的孤儿文件（每日重复执行）
     void this.reconcileOrphanFiles();
-    const timer = setInterval(
+    const reconcileTimer = setInterval(
       () => void this.reconcileOrphanFiles(),
       24 * 60 * 60 * 1000,
     );
-    timer.unref();
+    reconcileTimer.unref();
+
+    // 看门狗：generating 超过 12 分钟仍未到终态（进程半死/异常链路等死角）
+    // 一律强制标记失败，保证状态机一定收敛。12 分钟 > 单次 GLM 上限 5 分钟。
+    const watchdog = setInterval(() => void this.reapStuckTasks(), 60_000);
+    watchdog.unref();
+  }
+
+  /** 看门狗收割：卡死任务 → failed */
+  private async reapStuckTasks(): Promise<void> {
+    try {
+      const cutoff = new Date(Date.now() - 12 * 60 * 1000);
+      const reaped = await this.repo
+        .createQueryBuilder()
+        .update(PagegenRecord)
+        .set({
+          status: PAGEGEN_STATUS.FAILED,
+          error: '生成超时（系统已终止本次任务），请重新提交',
+        })
+        .where('status = :status AND updatedAt < :cutoff', {
+          status: PAGEGEN_STATUS.GENERATING,
+          cutoff,
+        })
+        .execute();
+      if (reaped.affected) {
+        this.logger.warn(`看门狗：${reaped.affected} 条卡死任务标记为超时失败`);
+      }
+    } catch (error) {
+      this.logger.error(
+        `看门狗执行失败：${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 
   // ==================== 提交（校验链） ====================
@@ -222,6 +251,12 @@ export class PagegenService implements OnModuleInit {
     }
   }
 
+  /**
+   * 处理一个任务：pending → generating → done / failed。
+   * 瞬时错误的自动重试在 GlmService 内部完成（最多 2 次调用）；
+   * 这里不做进程内重试——曾经的递归重试会因重入守卫(status!=pending)
+   * 空转返回，把任务永久卡在 generating（已由线上日志证实），故移除。
+   */
   private async process(id: number): Promise<void> {
     const record = await this.repo.findOneBy({ id });
     if (!record || record.status !== PAGEGEN_STATUS.PENDING) return;
@@ -231,7 +266,6 @@ export class PagegenService implements OnModuleInit {
       error: null as any,
     });
 
-    const attempt = this.attempts.get(id) || 0;
     try {
       const result = await this.glmService.generatePage({
         title: record.title,
@@ -260,16 +294,6 @@ export class PagegenService implements OnModuleInit {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      // 失败自动重试 1 次（仅本进程内）
-      if (attempt < 1) {
-        this.attempts.set(id, attempt + 1);
-        this.logger.warn(
-          `页面生成失败将重试 pageId=${record.pageId}：${message}`,
-        );
-        await this.process(id);
-        return;
-      }
-      this.attempts.delete(id);
       this.logger.error(`页面生成失败 pageId=${record.pageId}：${message}`);
       await this.repo.update(id, {
         status: PAGEGEN_STATUS.FAILED,
@@ -570,8 +594,15 @@ function csvCell(value: string): string {
 function friendlyError(message: string): string {
   if (message.includes('GLM_API_KEY'))
     return '服务端未配置生成密钥，请联系管理员';
-  if (message.includes('未返回有效的 HTML'))
+  if (
+    message.includes('未返回的有效 HTML') ||
+    message.includes('未返回有效的 HTML')
+  )
     return '生成结果无效，请调整描述后重试';
+  if (message.includes('余额不足'))
+    return 'GLM 账户余额不足，请联系管理员充值后重试';
+  if (message.includes('429')) return '生成请求被限流，请稍等一分钟再试';
+  if (message.includes('超时')) return message;
   if (message.includes('过大')) return message;
   if (message.includes('暂时不可用')) return '生成服务暂时不可用，请稍后重试';
   return `生成失败：${message.slice(0, 120)}`;

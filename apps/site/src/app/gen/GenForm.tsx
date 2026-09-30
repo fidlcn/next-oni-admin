@@ -104,13 +104,13 @@ export default function GenForm() {
       }
     }, 3000);
 
-    // 5 分钟超时兜底
+    // 前端超时兜底（后端单次 GLM 上限 5 分钟 + 余量）
     const timeout = setTimeout(() => {
       if (phaseRef.current === 'generating') {
-        setError('生成超时，请稍后在「最近生成」里查看，或重新提交');
+        setError('等待时间过长，请稍后在「最近生成」里查看结果，或重新提交');
         setPhase('failed');
       }
-    }, 300_000);
+    }, 400_000);
 
     return () => {
       clearInterval(tick);
@@ -132,6 +132,57 @@ export default function GenForm() {
       return next;
     });
   }
+
+  /** 只更新既有条目的状态（恢复轮询用，不动标题与时间） */
+  function patchRecentStatus(id: string, status: string) {
+    setRecents((prev) => {
+      if (!prev.some((r) => r.pageId === id && r.status !== status))
+        return prev;
+      const next = prev.map((r) => (r.pageId === id ? { ...r, status } : r));
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  // 恢复轮询：刷新/杀后台重开后，「最近生成」里未到终态的任务自动续上轮询。
+  // 手机浏览器后台会挂起定时器导致轮询中断、界面停在"生成中"——这里把它救回来。
+  useEffect(() => {
+    const stale = recents.filter(
+      (r) => r.status === 'generating' || r.status === 'pending',
+    );
+    if (stale.length === 0 || phase === 'generating') return;
+
+    let stopped = false;
+    const pollStale = async () => {
+      if (stopped || document.hidden) return;
+      for (const item of stale) {
+        try {
+          const data = await api(`/v1/pagegen/status/${item.pageId}`);
+          if (data.status === 'done' && data.url) {
+            patchRecentStatus(item.pageId, 'done');
+          } else if (data.status === 'failed') {
+            patchRecentStatus(item.pageId, 'failed');
+          }
+        } catch {
+          // 网络抖动忽略
+        }
+      }
+    };
+
+    void pollStale();
+    const timer = setInterval(() => void pollStale(), 3000);
+    // 从后台切回：立即补一次查询，不等下一个 3 秒
+    const onVisible = () => {
+      if (!document.hidden) void pollStale();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [recents, phase]);
 
   const toggleTag = (value: string) => {
     setTags((prev) => {
