@@ -1,9 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { PAGEGEN_TAGS, PAGEGEN_STYLES } from '../pagegen.constants';
+import {
+  PAGEGEN_TAGS,
+  PAGEGEN_STYLES,
+  PAGEGEN_TAG_VALUES,
+  PAGEGEN_MAX_TAGS,
+} from '../pagegen.constants';
 
-/** GLM 生成输入（service 组装好的结构化字段） */
+/** GLM 生成输入（title/tags 由 AI 决定时为空，风格保留用户选择） */
 export interface PagegenLlmInput {
   title: string;
   tags: string[];
@@ -13,10 +18,16 @@ export interface PagegenLlmInput {
 
 export interface PagegenLlmResult {
   html: string;
+  /** AI 自拟的标题/标签（来自元数据注释；用户已提供时为空，由 service 取用户值） */
+  title?: string;
+  tags?: string[];
   tokensIn: number;
   tokensOut: number;
   model: string;
 }
+
+/** 标签范围注入提示词（值=中文说明，供模型选择） */
+const TAG_RANGE = PAGEGEN_TAGS.map((t) => `${t.value}=${t.label}`).join(', ');
 
 /**
  * 系统提示词 —— 禁联网是硬约束：
@@ -25,18 +36,21 @@ export interface PagegenLlmResult {
  */
 const SYSTEM_PROMPT = `你是一名资深网页设计师与前端工程师。根据用户输入生成一个完整的 HTML5 单页，严格遵守：
 
-1. 只输出一个完整 HTML 文档：以 <!DOCTYPE html> 开始、以 </html> 结束；不要任何解释文字、不要 markdown 代码围栏。
-2. 【禁止联网】不得引用任何外部脚本、字体、图标库、CSS 框架、CDN 资源；不得编造或引用任何网络来源。
-3. 图片只允许使用用户正文中明确给出的图片 URL 或 data URI；用户没提供就不要放外链图片，用纯 CSS 图形、emoji 或内联 SVG 代替。
-4. 禁止 <script>、<iframe>、<form>、<input> 等表单控件与任何 on* 事件属性；全部样式通过 <style> 标签或 style 属性内联实现。
-5. 内容完全基于用户输入与你的已有知识组织，不要虚构无法核实的事实（如具体奖项、资质、数据来源）。
-6. 【移动端优先，硬性要求】页面主要在手机上被打开：
+1. 输出分两部分：第一行是一行元数据注释（单行合法 JSON，见下），换行后输出完整 HTML 文档（<!DOCTYPE html> 开始、</html> 结束）；不要任何解释文字、不要 markdown 代码围栏。
+2. 元数据注释格式固定为：<!--pagegen:{"title":"页面标题","tags":["标签值"]}>
+   - title：用户提供了标题就用用户的；没提供就自拟一个简洁有力的中文标题（20 字以内）；
+   - tags：从以下范围中选择 1-3 个最贴合内容的标签值（英文值，不要中文）——${TAG_RANGE}。
+3. 【禁止联网】不得引用任何外部脚本、字体、图标库、CSS 框架、CDN 资源；不得编造或引用任何网络来源。
+4. 图片只允许使用用户正文中明确给出的图片 URL 或 data URI；用户没提供就不要放外链图片，用纯 CSS 图形、emoji 或内联 SVG 代替。
+5. 禁止 <script>、<iframe>、<form>、<input> 等表单控件与任何 on* 事件属性；全部样式通过 <style> 标签或 style 属性内联实现。
+6. 内容完全基于用户输入与你的已有知识组织，不要虚构无法核实的事实（如具体奖项、资质、数据来源）。
+7. 【移动端优先，硬性要求】页面主要在手机上被打开：
    - 按 375px 宽的小屏设计，再向上适配平板与桌面；使用百分比/max-width 自适应布局；
    - 禁止任何超过视口的固定宽度（如 width:980px），禁止出现横向滚动；
    - 正文字号移动端不小于 16px、行高不低于 1.6；标题层级分明（h1 最大、逐级递减）；
    - 段落宜短（2-4 行），重要信息用列表或卡片分区呈现，避免大段文字糊在一起；
    - 文字与背景对比度要足够，强光/弱光环境下都能看清。
-7. 中文排版清晰，合理使用标题层级、留白、配色与分区；页面要完整、精致、可直接发布。`;
+8. 中文排版清晰，合理使用标题层级、留白、配色与分区；页面要完整、精致、可直接发布。`;
 
 /** 从模型输出中提取 HTML 文档（剥解释文字/代码围栏），纯函数便于单测 */
 export function extractHtml(raw: string): string {
@@ -57,6 +71,33 @@ export function extractHtml(raw: string): string {
   throw new Error('模型未返回有效的 HTML 文档');
 }
 
+/** 解析元数据注释 <!--pagegen:{"title":"..","tags":[..]}-->（容错：缺失/非法 JSON 返回空），纯函数便于单测 */
+export function extractMeta(raw: string): { title?: string; tags?: string[] } {
+  const m = (raw || '').match(/<!--\s*pagegen:([\s\S]*?)-->/i);
+  if (!m) return {};
+  try {
+    const json = JSON.parse(m[1].trim());
+    return {
+      title: typeof json.title === 'string' ? json.title : undefined,
+      tags: Array.isArray(json.tags) ? json.tags : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** 校验 AI 标签：过滤白名单外的值、去重、截取上限；全无效时兜底为「创意实验」，纯函数便于单测 */
+export function pickValidTags(raw: unknown): string[] {
+  const arr = Array.isArray(raw)
+    ? raw.filter(
+        (t): t is string =>
+          typeof t === 'string' && PAGEGEN_TAG_VALUES.includes(t),
+      )
+    : [];
+  const uniq = [...new Set(arr)].slice(0, PAGEGEN_MAX_TAGS);
+  return uniq.length > 0 ? uniq : ['fun'];
+}
+
 /**
  * GLM 调用服务 —— OpenAI 兼容 chat/completions
  * 密钥仅从环境变量读取，只存进程内存；不打印密钥与完整提示词
@@ -69,15 +110,12 @@ export class GlmService {
 
   /** 组装对话消息（纯函数便于单测） */
   buildMessages(input: PagegenLlmInput) {
-    const tagLabels = PAGEGEN_TAGS.filter((t) =>
-      input.tags.includes(t.value),
-    ).map((t) => t.label);
     const style = PAGEGEN_STYLES.find((s) => s.value === input.style);
 
     const userPrompt = [
-      `页面标题：${input.title}`,
-      `主题标签：${tagLabels.join('、') || '未指定'}`,
-      `设计风格：${style ? `${style.label} —— ${style.design}` : '简约 —— 大量留白、单一主色、细字重'}`,
+      `页面标题：${input.title || '（未提供——请在元数据注释里自拟）'}`,
+      `主题标签：${input.tags.length > 0 ? input.tags.join('、') : '（未选择——请在元数据注释里从预设范围挑选）'}`,
+      `设计风格：${style ? `${style.label} —— ${style.design}` : '默认 —— 不限定风格，根据内容自由发挥'}`,
       '',
       '页面内容要求：',
       input.content,
@@ -188,8 +226,11 @@ export class GlmService {
         throw new Error('GLM 返回内容为空');
       }
 
+      const meta = extractMeta(content);
       return {
         html: extractHtml(content),
+        title: meta.title,
+        tags: meta.tags,
         tokensIn: json?.usage?.prompt_tokens ?? 0,
         tokensOut: json?.usage?.completion_tokens ?? 0,
         model,

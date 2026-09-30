@@ -41,7 +41,8 @@ export class PagegenController {
   submit(@Body() dto: SubmitPagegenDto, @Req() req: any) {
     // nginx 设置 X-Real-IP；直连场景回退 req.ip
     const ip = (req.headers['x-real-ip'] as string) || req.ip || 'unknown';
-    return this.pagegenService.submit(dto, ip);
+    const userAgent = (req.headers['user-agent'] as string) || undefined;
+    return this.pagegenService.submit(dto, ip, userAgent);
   }
 
   /** H5 轮询任务状态 —— 公开（pageId 不可猜测即访问控制） */

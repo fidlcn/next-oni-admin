@@ -156,6 +156,47 @@ export default function HostedPages() {
     },
     { title: 'IP', dataIndex: 'ip', width: 130 },
     {
+      title: '设备',
+      dataIndex: 'deviceType',
+      width: 80,
+      render: (v: string) => {
+        if (!v) return '-';
+        const meta: Record<string, { label: string; color: string }> = {
+          mobile: { label: '移动', color: 'blue' },
+          tablet: { label: '平板', color: 'cyan' },
+          desktop: { label: '桌面', color: 'default' },
+        };
+        const m = meta[v] || { label: v, color: 'default' };
+        return <Tag color={m.color}>{m.label}</Tag>;
+      },
+    },
+    {
+      title: '浏览器',
+      dataIndex: 'browser',
+      width: 130,
+      ellipsis: true,
+      render: (v: string) =>
+        v
+          ? v
+              .replace('MicroMessenger', '微信内置')
+              .replace('WeChat', '微信内置')
+          : '-',
+    },
+    {
+      title: '操作系统',
+      dataIndex: 'os',
+      width: 110,
+      ellipsis: true,
+      render: (v: string) => v || '-',
+    },
+    {
+      title: '机型',
+      dataIndex: 'deviceModel',
+      width: 110,
+      ellipsis: true,
+      render: (v: string) => v || '-',
+    },
+    {
       title: '提示词',
       width: 90,
       render: (_: any, record: any) => (

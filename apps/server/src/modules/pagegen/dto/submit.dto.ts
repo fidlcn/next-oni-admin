@@ -1,7 +1,7 @@
 import {
   IsString,
   IsArray,
-  ArrayMinSize,
+  IsOptional,
   ArrayMaxSize,
   IsIn,
   Length,
@@ -20,22 +20,24 @@ import {
 
 /**
  * 提交生成任务 DTO —— 公开接口（口令准入）
- * 标签/风格必须在预设集合内，长度限制与常量保持一致
+ * 表单精简后：标题、标签均为可选 —— 未提供时由 AI 决定
+ * （标题自拟；标签由模型在元数据注释里从预设范围选择）
  */
 export class SubmitPagegenDto {
+  @IsOptional()
   @IsString()
-  @Length(1, PAGEGEN_TITLE_MAX, {
-    message: `标题长度 1-${PAGEGEN_TITLE_MAX} 字`,
+  @MaxLength(PAGEGEN_TITLE_MAX, {
+    message: `标题最长 ${PAGEGEN_TITLE_MAX} 字`,
   })
-  title: string;
+  title?: string;
 
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1, { message: '至少选择 1 个标签' })
   @ArrayMaxSize(PAGEGEN_MAX_TAGS, {
-    message: `最多选择 ${PAGEGEN_MAX_TAGS} 个标签`,
+    message: `最多 ${PAGEGEN_MAX_TAGS} 个标签`,
   })
   @IsIn(PAGEGEN_TAG_VALUES, { each: true, message: '包含未知的标签' })
-  tags: string[];
+  tags?: string[];
 
   @IsIn(PAGEGEN_STYLE_VALUES, { message: '未知的风格' })
   style: string;

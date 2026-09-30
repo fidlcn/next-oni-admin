@@ -67,4 +67,36 @@ export class PagegenRecord extends BaseEntity {
     comment: '浏览数（目录页/结果页点击埋点，近似值）',
   })
   views: number;
+
+  // ===== 提交设备特征（UA 解析，管理端独立列展示）=====
+
+  @Column({
+    name: 'device_type',
+    length: 16,
+    nullable: true,
+    comment: '设备类型：mobile/tablet/desktop',
+  })
+  deviceType: string;
+
+  @Column({
+    length: 64,
+    nullable: true,
+    comment: '浏览器（名称+主版本，如 Chrome 129）',
+  })
+  browser: string;
+
+  @Column({
+    length: 64,
+    nullable: true,
+    comment: '操作系统（如 iOS 17 / Android 14）',
+  })
+  os: string;
+
+  @Column({
+    name: 'device_model',
+    length: 64,
+    nullable: true,
+    comment: '机型（Android 可精确到型号；iOS 仅 iPhone）',
+  })
+  deviceModel: string;
 }

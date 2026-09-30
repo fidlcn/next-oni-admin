@@ -100,6 +100,12 @@ export interface PagegenStyleDef {
 
 export const PAGEGEN_STYLES: PagegenStyleDef[] = [
   {
+    value: 'auto',
+    label: '默认',
+    design:
+      '不限定风格——根据内容主题与受众自由选择最合适的设计语言，交给你发挥',
+  },
+  {
     value: 'minimal',
     label: '简约',
     design:
