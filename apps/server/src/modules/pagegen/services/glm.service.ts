@@ -83,7 +83,12 @@ export class GlmService {
     ];
   }
 
-  /** 调 GLM 生成页面，网络/5xx 错误自动重试 1 次 */
+  /**
+   * 调 GLM 生成页面。重试策略：
+   * - 网络类/5xx 错误：立即重试 1 次
+   * - 429（限流/余额）：退避 15 秒再试 1 次；若响应体表明余额不足则直接终止
+   * - 超时（AbortError）：不重试，单次已等满 5 分钟
+   */
   async generatePage(input: PagegenLlmInput): Promise<PagegenLlmResult> {
     let lastError: Error | null = null;
 
@@ -95,15 +100,29 @@ export class GlmService {
         this.logger.warn(
           `GLM 调用失败（第 ${attempt + 1} 次）：${lastError.message}`,
         );
+        if (lastError.name === 'AbortError') break;
+        if (/1302|余额不足/.test(lastError.message)) break;
+        // 429 立即重试没有意义（线上日志证实两次同秒失败），退避后再试
+        if (lastError.message.includes('GLM 接口返回 429') && attempt === 0) {
+          await new Promise((r) => setTimeout(r, 15_000));
+        }
       }
     }
 
+    if (lastError?.name === 'AbortError') {
+      throw new Error('模型响应超时（超过 5 分钟），请精简内容后重试');
+    }
+    if (/1302|余额不足/.test(lastError?.message || '')) {
+      throw new Error('GLM 账户余额不足，请联系管理员充值后重试');
+    }
     throw new Error('生成服务暂时不可用，请稍后重试');
   }
 
   private async callOnce(input: PagegenLlmInput): Promise<PagegenLlmResult> {
     const baseUrl = this.configService.get<string>(
       'GLM_BASE_URL',
+      // 默认按量付费通道；GLM Coding Plan 订阅需在 env 里改为
+      // https://open.bigmodel.cn/api/coding/paas/v4（套餐额度只在该通道生效）
       'https://open.bigmodel.cn/api/paas/v4',
     );
     const apiKey = this.configService.get<string>('GLM_API_KEY', '');
@@ -135,7 +154,8 @@ export class GlmService {
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 120_000);
+    // 非流式生成 16K tokens 可能 legitimately 超过 2 分钟，给足 5 分钟
+    const timer = setTimeout(() => controller.abort(), 300_000);
 
     try {
       const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -149,7 +169,11 @@ export class GlmService {
       });
 
       if (!response.ok) {
-        throw new Error(`GLM 接口返回 ${response.status}`);
+        // 带上响应体（智谱的具体原因码在 body：1302=余额不足、1301=内容安全等）
+        const body = (await response.text().catch(() => '')).slice(0, 200);
+        throw new Error(
+          `GLM 接口返回 ${response.status}${body ? `：${body}` : ''}`,
+        );
       }
 
       const json: any = await response.json();

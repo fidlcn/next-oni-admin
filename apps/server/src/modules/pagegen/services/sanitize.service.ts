@@ -14,6 +14,11 @@ import {
 @Injectable()
 export class SanitizeService {
   private readonly options: sanitizeHtml.IOptions = {
+    // <style> 标签在白名单内（内联 CSS 是生成页质量的核心）。
+    // sanitize-html 会对此告警；此处显式确认风险已评估：
+    // 白名单不含任何可执行脚本的标签/属性，且 nginx /p/ 的 CSP
+    // （default-src 'none'）作为第二道防线彻底禁脚本。
+    allowVulnerableTags: true,
     allowedTags: [
       'html',
       'head',
