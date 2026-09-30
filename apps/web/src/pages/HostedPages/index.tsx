@@ -264,6 +264,7 @@ export default function HostedPages() {
       </Row>
 
       <Table
+        scroll={{ x: 'max-content' }}
         columns={columns}
         dataSource={list}
         rowKey="id"

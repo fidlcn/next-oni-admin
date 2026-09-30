@@ -138,6 +138,7 @@ export default function MenuPage() {
       </div>
 
       <Table
+        scroll={{ x: 'max-content' }}
         columns={columns}
         dataSource={menus}
         rowKey="id"

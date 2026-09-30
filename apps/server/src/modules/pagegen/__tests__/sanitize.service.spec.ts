@@ -63,6 +63,10 @@ describe('SanitizeService', () => {
       );
       expect(out).toMatch(/^<!DOCTYPE html>/i);
       expect(out).toContain('<meta charset="utf-8">');
+      // viewport 是移动端可读性的关键：没有它手机按 980px 桌面宽渲染再缩小
+      expect(out).toContain(
+        '<meta name="viewport" content="width=device-width, initial-scale=1">',
+      );
       expect(out).toContain('<title>测试标题</title>');
       expect(out).toContain('property="og:title" content="测试标题"');
       expect(out).toContain('property="og:description" content="这是正文摘要"');

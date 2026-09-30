@@ -125,16 +125,21 @@
 
 .term-replay {
   position: absolute;
-  right: 26px;
-  bottom: 22px;
+  right: 7vw;
+  /* 与「进入主页」按钮同高（44px）、同基线（bottom: 6vh） */
+  bottom: 6vh;
   z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-width: 44px;
   font-family: "SF Mono", Menlo, Consolas, monospace;
-  font-size: 10px;
-  letter-spacing: 0.3em;
-  text-transform: uppercase;
+  font-size: 15px;
+  line-height: 1;
   color: var(--term-green-dim);
   border: 1px solid rgba(61, 255, 124, 0.3);
-  padding: 8px 16px;
+  padding: 0 12px;
   background: transparent;
   cursor: pointer;
   opacity: 0;
@@ -153,18 +158,22 @@
   border-color: rgba(61, 255, 124, 0.8);
 }
 
-/* 进入主页面按钮（H5 主入口，PC 也可点） */
+/* 进入主页面按钮（H5 主入口，PC 也可点）——高 44px，与重播按钮同高同基线 */
 .term-enter {
   position: absolute;
   left: 7vw;
   bottom: 6vh;
   z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
   font-family: "SF Mono", Menlo, Consolas, monospace;
   font-size: 12px;
   letter-spacing: 0.24em;
   color: var(--term-green);
   border: 1px solid rgba(61, 255, 124, 0.45);
-  padding: 12px 22px;
+  padding: 0 22px;
   background: rgba(61, 255, 124, 0.04);
   cursor: pointer;
   text-shadow: 0 0 7px rgba(61, 255, 124, 0.75);

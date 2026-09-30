@@ -270,13 +270,15 @@ export default function TerminalGate({ onEnter }: { onEnter: () => void }) {
       </button>
       <button
         className={`term-replay ${showReplay ? 'show' : ''}`}
+        aria-label="重播启动序列"
+        title="重播"
         onClick={(e) => {
           e.stopPropagation();
           setCmd('');
           void run();
         }}
       >
-        ↻ replay
+        ↻
       </button>
     </div>
   );

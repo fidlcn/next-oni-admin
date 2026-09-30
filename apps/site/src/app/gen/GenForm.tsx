@@ -337,13 +337,13 @@ export default function GenForm() {
           />
         </div>
 
-        {/* 口令 */}
+        {/* 口令 —— 明文显示：共享口令无需遮掩，手机上更好核对 */}
         <div>
           <label className="mb-1.5 block text-sm font-medium text-gray-700">
             访问口令
           </label>
           <input
-            type="password"
+            type="text"
             value={accessCode}
             onChange={(e) => setAccessCode(e.target.value)}
             maxLength={128}

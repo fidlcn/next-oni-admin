@@ -107,8 +107,10 @@ export class SanitizeService {
    * 落盘前的最终处理：
    * 1. 补 <!DOCTYPE html>（sanitize-html 会剥掉）
    * 2. 去掉模型给的 <title> 与 charset，注入我们自己的（防编码与标题失控）
-   * 3. 注入 og:title / og:description / og:type，微信/QQ 分享卡片可读
-   * 4. 大小上限校验
+   * 3. 注入 viewport —— 白名单剥掉了模型的 meta，没有它手机会按 980px
+   *    桌面宽度渲染再整体缩小，文字小到看不清（移动端可读性的关键）
+   * 4. 注入 og:title / og:description / og:type，微信/QQ 分享卡片可读
+   * 5. 大小上限校验
    */
   finalize(html: string, title: string, contentSummary: string): string {
     let out = html;
@@ -123,6 +125,7 @@ export class SanitizeService {
 
     const headBlock =
       `<meta charset="utf-8">\n` +
+      `<meta name="viewport" content="width=device-width, initial-scale=1">\n` +
       `<title>${escapeText(title)}</title>\n` +
       `<meta property="og:title" content="${ogTitle}">\n` +
       `<meta property="og:description" content="${ogDesc}">\n` +
