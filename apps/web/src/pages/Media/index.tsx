@@ -125,6 +125,7 @@ export default function MediaPage() {
       </div>
 
       <Table
+        scroll={{ x: 'max-content' }}
         columns={columns}
         dataSource={list}
         rowKey="id"

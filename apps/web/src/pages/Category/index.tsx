@@ -127,6 +127,7 @@ export default function CategoryPage() {
       </div>
 
       <Table
+        scroll={{ x: 'max-content' }}
         columns={columns}
         dataSource={list}
         rowKey="id"

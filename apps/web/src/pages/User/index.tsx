@@ -202,6 +202,7 @@ export default function UserPage() {
       </div>
 
       <Table
+        scroll={{ x: 'max-content' }}
         columns={columns}
         dataSource={users}
         rowKey="id"

@@ -134,6 +134,7 @@ export default function RolePage() {
       </div>
 
       <Table
+        scroll={{ x: 'max-content' }}
         columns={columns}
         dataSource={roles}
         rowKey="id"

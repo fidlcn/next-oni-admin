@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Layout, Menu, Dropdown, Button, theme } from 'antd';
+import { useEffect, useState } from 'react';
+import { Layout, Menu, Dropdown, Button, Drawer, theme } from 'antd';
 import {
   DashboardOutlined,
   UserOutlined,
@@ -19,17 +19,29 @@ import { useAuthStore } from '@/stores/auth';
 const { Header, Sider, Content } = Layout;
 
 /**
- * 管理后台布局 —— 登录用户专用的侧边栏 + 顶栏布局
- * 侧边栏菜单根据路由高亮，支持折叠
- * 顶栏显示面包屑和用户操作
- * 移动端侧边栏自动收起，通过按钮展开
+ * 管理后台布局 —— 响应式：
+ * - 桌面/平板（≥768px）：常驻侧边栏，<992px 自动折叠为图标模式
+ * - 手机（<768px）：侧边栏隐藏，汉堡按钮唤出抽屉菜单（完整文字竖排，
+ *   点击跳转后自动收起）——避免窄屏下菜单文字换行
+ * 列表页表格自带横向滚动，内容区边距在手机上收窄
  */
 export default function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const { token: themeToken } = theme.useToken();
+
+  // 手机判定（<768px），窗口变化时实时同步
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -111,42 +123,66 @@ export default function AdminLayout() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      {/* 侧边栏 */}
-      <Sider
-        trigger={null}
-        collapsible
-        collapsed={collapsed}
-        breakpoint="lg"
-        onBreakpoint={(broken) => setCollapsed(broken)}
-        style={{ background: themeToken.colorBgContainer }}
-      >
-        <div
-          style={{
-            height: 64,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 600,
-            fontSize: collapsed ? 14 : 18,
-            borderBottom: '1px solid #f0f0f0',
-          }}
+      {/* 桌面/平板：常驻侧边栏；手机：抽屉菜单替代 */}
+      {!isMobile && (
+        <Sider
+          trigger={null}
+          collapsible
+          collapsed={collapsed}
+          breakpoint="lg"
+          onBreakpoint={(broken) => setCollapsed(broken)}
+          style={{ background: themeToken.colorBgContainer }}
         >
-          {collapsed ? 'NO' : 'Next Oni Admin'}
-        </div>
-        <Menu
-          mode="inline"
-          selectedKeys={selectedKeys}
-          items={menuItems}
-          onClick={({ key }) => navigate(key)}
-          style={{ borderRight: 0 }}
-        />
-      </Sider>
+          <div
+            style={{
+              height: 64,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 600,
+              fontSize: collapsed ? 14 : 18,
+              borderBottom: '1px solid #f0f0f0',
+            }}
+          >
+            {collapsed ? 'NO' : 'Next Oni Admin'}
+          </div>
+          <Menu
+            mode="inline"
+            selectedKeys={selectedKeys}
+            items={menuItems}
+            onClick={({ key }) => navigate(key)}
+            style={{ borderRight: 0 }}
+          />
+        </Sider>
+      )}
+
+      {isMobile && (
+        <Drawer
+          placement="left"
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          width={224}
+          title="Next Oni Admin"
+          styles={{ body: { padding: 0 } }}
+        >
+          <Menu
+            mode="inline"
+            selectedKeys={selectedKeys}
+            items={menuItems}
+            onClick={({ key }) => {
+              navigate(key);
+              setMobileOpen(false);
+            }}
+            style={{ borderRight: 0 }}
+          />
+        </Drawer>
+      )}
 
       <Layout>
         {/* 顶栏 */}
         <Header
           style={{
-            padding: '0 24px',
+            padding: isMobile ? '0 12px' : '0 24px',
             background: themeToken.colorBgContainer,
             display: 'flex',
             alignItems: 'center',
@@ -156,8 +192,18 @@ export default function AdminLayout() {
         >
           <Button
             type="text"
-            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
+            icon={
+              isMobile ? (
+                <MenuUnfoldOutlined />
+              ) : collapsed ? (
+                <MenuUnfoldOutlined />
+              ) : (
+                <MenuFoldOutlined />
+              )
+            }
+            onClick={() =>
+              isMobile ? setMobileOpen(true) : setCollapsed(!collapsed)
+            }
           />
 
           <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
@@ -167,11 +213,11 @@ export default function AdminLayout() {
           </Dropdown>
         </Header>
 
-        {/* 内容区 */}
+        {/* 内容区 —— 手机收窄边距 */}
         <Content
           style={{
-            margin: 16,
-            padding: 24,
+            margin: isMobile ? 8 : 16,
+            padding: isMobile ? 12 : 24,
             background: themeToken.colorBgContainer,
             borderRadius: themeToken.borderRadiusLG,
             overflow: 'auto',

@@ -201,6 +201,7 @@ export default function ContentPage() {
       </div>
 
       <Table
+        scroll={{ x: 'max-content' }}
         columns={columns}
         dataSource={list}
         rowKey="id"
