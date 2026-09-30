@@ -17,13 +17,13 @@ import {
 } from 'antd';
 import {
   DeleteOutlined,
-  EyeOutlined,
   ExportOutlined,
   FileDoneOutlined,
   WarningOutlined,
   PayCircleOutlined,
   HddOutlined,
   LinkOutlined,
+  FormOutlined,
 } from '@ant-design/icons';
 import {
   getHostedPages,
@@ -49,6 +49,11 @@ function formatBytes(bytes: number): string {
  * 托管页管理 —— 公开 H5 提交生成的 HTML 页面托管在此
  * 顶部统计卡片（今日生成/失败率/费用估算/磁盘占用）+ 列表（提示词查看/跳转/删除）
  */
+
+/** 主站 /gen 生成页地址；生产构建时通过 VITE_GEN_URL 覆盖为线上主站域名 */
+const GEN_PAGE_URL =
+  (import.meta.env.VITE_GEN_URL as string | undefined) ||
+  'http://localhost:3001/gen';
 export default function HostedPages() {
   const [list, setList] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -148,26 +153,16 @@ export default function HostedPages() {
     },
     {
       title: '操作',
-      width: 160,
+      width: 90,
       render: (_: any, record: any) => (
-        <Space>
-          <Button
-            size="small"
-            icon={<EyeOutlined />}
-            disabled={!record.url}
-            onClick={() => record.url && window.open(record.url, '_blank')}
-          >
-            查看
+        <Popconfirm
+          title="删除后页面文件与记录均不可恢复，确定？"
+          onConfirm={() => handleDelete(record.id)}
+        >
+          <Button size="small" danger icon={<DeleteOutlined />}>
+            删除
           </Button>
-          <Popconfirm
-            title="删除后页面文件与记录均不可恢复，确定？"
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Button size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
+        </Popconfirm>
       ),
     },
   ];
@@ -211,6 +206,12 @@ export default function HostedPages() {
               }),
             )}
           />
+          <Button
+            icon={<FormOutlined />}
+            onClick={() => window.open(GEN_PAGE_URL, '_blank')}
+          >
+            去生成页
+          </Button>
           <Button icon={<ExportOutlined />} onClick={handleExport}>
             导出 CSV
           </Button>
