@@ -4,8 +4,8 @@ import { SITE_NAME } from '@/lib/config';
 const navLinks = [
   { href: '/', label: '首页' },
   { href: '/blog', label: '博客' },
+  { href: '/pages', label: '页面广场' },
   { href: '/about', label: '关于' },
-  { href: '/contact', label: '联系' },
 ];
 
 export default function SiteHeader() {

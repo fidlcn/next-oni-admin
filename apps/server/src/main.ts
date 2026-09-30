@@ -38,12 +38,14 @@ export const {
   ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
   getSessionIdentifier: () => 'session',
   // 跳过认证端点的 CSRF 校验 —— 这些端点在用户尚未持有 CSRF cookie 时就需要工作
+  // pagegen/submit 自带口令秘密（请求方必须知道口令才能通过），豁免 CSRF 无放大风险
   skipCsrfProtection: (req) => {
     const path = req.path || req.url;
     return (
       path === '/v1/auth/login' ||
       path === '/v1/auth/refresh' ||
-      path === '/v1/auth/register'
+      path === '/v1/auth/register' ||
+      path === '/v1/pagegen/submit'
     );
   },
 });

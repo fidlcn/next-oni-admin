@@ -14,6 +14,7 @@ import ContentPage from '@/pages/Content';
 import CategoryPage from '@/pages/Category';
 import MediaPage from '@/pages/Media';
 import SettingsPage from '@/pages/Settings';
+import HostedPages from '@/pages/HostedPages';
 
 const routeConfig = [
   {
@@ -37,6 +38,7 @@ const routeConfig = [
       { path: 'contents', element: <ContentPage /> },
       { path: 'categories', element: <CategoryPage /> },
       { path: 'media', element: <MediaPage /> },
+      { path: 'hosted-pages', element: <HostedPages /> },
       { path: 'users', element: <UserPage /> },
       { path: 'roles', element: <RolePage /> },
       { path: 'menus', element: <MenuPage /> },

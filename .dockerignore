@@ -1,0 +1,33 @@
+# 版本管理与 IDE
+.git
+.gitignore
+.cursor
+.codegraph
+.husky
+.vscode
+.idea
+
+# 依赖与构建产物（容器内重新安装/构建）
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/*.tsbuildinfo
+
+# 本地敏感/环境文件
+apps/server/.env
+apps/server/.env.*
+apps/server/keys
+apps/server/uploads
+
+# 嵌套 workspace 文件（Docker 内统一走根 workspace 安装）
+apps/site/pnpm-lock.yaml
+apps/site/pnpm-workspace.yaml
+
+# 部署与文档
+deploy
+*.md
+coverage
+.DS_Store
+*.log

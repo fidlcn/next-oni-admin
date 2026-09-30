@@ -15,6 +15,7 @@ import { ContentModule } from './modules/content/content.module';
 import { CategoryModule } from './modules/category/category.module';
 import { MediaModule } from './modules/media/media.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { PagegenModule } from './modules/pagegen/pagegen.module';
 
 /**
  * 应用根模块 —— 组装所有全局能力和业务模块
@@ -59,6 +60,9 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     CategoryModule,
     MediaModule,
     DashboardModule,
+
+    // 托管页生成（H5 表单 → GLM → 静态页）
+    PagegenModule,
   ],
 })
 export class AppModule {}
