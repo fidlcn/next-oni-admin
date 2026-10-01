@@ -6,6 +6,7 @@ node_modules/
 dist/
 .turbo/
 .next/
+apps/server/pages/
 
 # Environment — 所有 .env 文件都不入库，只保留 .env.example 模板
 .env
