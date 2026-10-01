@@ -12,7 +12,13 @@ import {
   Req,
 } from '@nestjs/common';
 import { ContentService } from './content.service';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import {
+  QueryContentDto,
+  CreateContentDto,
+  UpdateContentDto,
+  BatchStatusDto,
+  BatchIdsDto,
+} from './dto/content.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
 
@@ -29,13 +35,7 @@ export class ContentController {
   /** 公开：获取已发布文章列表（博客首页用） */
   @Get('public')
   @Public()
-  findPublic(
-    @Query()
-    dto: PaginationDto & {
-      keyword?: string;
-      categoryId?: number;
-    },
-  ) {
+  findPublic(@Query() dto: QueryContentDto) {
     // 只返回已发布的文章
     return this.contentService.findAll({ ...dto, status: 1 });
   }
@@ -48,14 +48,7 @@ export class ContentController {
   }
 
   @Get()
-  findAll(
-    @Query()
-    dto: PaginationDto & {
-      keyword?: string;
-      status?: number;
-      categoryId?: number;
-    },
-  ) {
+  findAll(@Query() dto: QueryContentDto) {
     return this.contentService.findAll(dto);
   }
 
@@ -65,25 +58,24 @@ export class ContentController {
   }
 
   @Post()
-  create(@Body() dto: any, @Req() req: any) {
+  create(@Body() dto: CreateContentDto, @Req() req: any) {
     return this.contentService.create(dto, req.user.id);
   }
 
-  @Put(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: any) {
-    return this.contentService.update(id, dto);
-  }
-
-  /** 批量更新状态 */
   @Put('batch/status')
-  batchStatus(@Body() dto: { ids: number[]; status: number }) {
+  batchStatus(@Body() dto: BatchStatusDto) {
     return this.contentService.batchUpdateStatus(dto.ids, dto.status);
   }
 
   /** 批量删除 */
   @Delete('batch')
-  batchRemove(@Body() dto: { ids: number[] }) {
+  batchRemove(@Body() dto: BatchIdsDto) {
     return this.contentService.batchRemove(dto.ids);
+  }
+
+  @Put(':id')
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateContentDto) {
+    return this.contentService.update(id, dto);
   }
 
   @Delete(':id')

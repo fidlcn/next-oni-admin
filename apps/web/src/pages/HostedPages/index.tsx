@@ -69,6 +69,12 @@ export default function HostedPages() {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20 });
+
+  // 筛选变化时重置回第 1 页（否则停留在超出范围的页码上看到空列表）
+  const applyFilters = (patch: Record<string, unknown>) => {
+    setFilters((f: any) => ({ ...f, ...patch }));
+    setPagination((p) => ({ ...p, page: 1 }));
+  };
   const [filters, setFilters] = useState<any>({});
   const [detail, setDetail] = useState<any>(null);
 
@@ -243,13 +249,13 @@ export default function HostedPages() {
             placeholder="搜索标题"
             allowClear
             style={{ width: 180 }}
-            onSearch={(v) => setFilters({ ...filters, keyword: v })}
+            onSearch={(v) => applyFilters({ keyword: v })}
           />
           <Select
             placeholder="状态"
             allowClear
             style={{ width: 110 }}
-            onChange={(v) => setFilters({ ...filters, status: v })}
+            onChange={(v) => applyFilters({ status: v })}
             options={Object.entries(PAGEGEN_STATUS_META).map(([value, m]) => ({
               value,
               label: m.label,
@@ -259,7 +265,7 @@ export default function HostedPages() {
             placeholder="标签"
             allowClear
             style={{ width: 110 }}
-            onChange={(v) => setFilters({ ...filters, tag: v })}
+            onChange={(v) => applyFilters({ tag: v })}
             options={Object.entries(PAGEGEN_TAG_LABELS).map(
               ([value, label]) => ({
                 value,

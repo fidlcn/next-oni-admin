@@ -8,7 +8,8 @@ import { BaseEntity } from './base.entity';
  * 同一时间仅允许一个设备占用（activeDeviceId），空闲超时自动释放
  */
 @Entity('pagegen_tokens')
-@Index(['createdAt'])
+// 索引名与迁移（20261002000000）保持一致
+@Index('idx_pagegen_token_created', ['createdAt'])
 export class PagegenToken extends BaseEntity {
   @Column({
     length: 32,

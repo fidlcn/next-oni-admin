@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 import { getDatabaseConfig } from './config/database.config';
 import { getThrottlerConfig } from './config/app.config';
@@ -10,7 +11,6 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { RoleModule } from './modules/role/role.module';
 import { MenuModule } from './modules/menu/menu.module';
-import { LogModule } from './modules/log/log.module';
 import { ContentModule } from './modules/content/content.module';
 import { CategoryModule } from './modules/category/category.module';
 import { MediaModule } from './modules/media/media.module';
@@ -19,7 +19,7 @@ import { PagegenModule } from './modules/pagegen/pagegen.module';
 
 /**
  * 应用根模块 —— 组装所有全局能力和业务模块
- * 加载顺序：Config → TypeORM → Throttler → Auth → 业务模块 → 日志
+ * 加载顺序：Config → TypeORM → Throttler → Auth → 业务模块
  * Auth 必须在 User/Role/Menu 之前，因为它们依赖 AuthModule 导出的 Guard
  */
 @Module({
@@ -36,7 +36,7 @@ import { PagegenModule } from './modules/pagegen/pagegen.module';
       useFactory: getDatabaseConfig,
     }),
 
-    // 接口限流
+    // 接口限流（全局守卫，所有路由默认生效，可用 @Throttle 覆盖/ @SkipThrottle 豁免）
     ThrottlerModule.forRootAsync({
       useFactory: getThrottlerConfig,
     }),
@@ -52,9 +52,6 @@ import { PagegenModule } from './modules/pagegen/pagegen.module';
     RoleModule,
     MenuModule,
 
-    // 操作日志
-    LogModule,
-
     // CMS 业务模块
     ContentModule,
     CategoryModule,
@@ -63,6 +60,13 @@ import { PagegenModule } from './modules/pagegen/pagegen.module';
 
     // 托管页生成（H5 表单 → GLM → 静态页）
     PagegenModule,
+  ],
+  providers: [
+    // 全局限流守卫 —— 此前只在 pagegen 局部启用，登录等公开端点实际未受保护
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
 })
 export class AppModule {}

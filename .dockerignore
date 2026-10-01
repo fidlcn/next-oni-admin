@@ -15,11 +15,15 @@ node_modules
 **/.turbo
 **/*.tsbuildinfo
 
-# 本地敏感/环境文件
+# 本地敏感/环境文件（根 .env 含全部 compose 密钥，绝不能进镜像）
+.env
+.env.*
 apps/server/.env
 apps/server/.env.*
 apps/server/keys
 apps/server/uploads
+**/.env
+**/.env.*
 
 # 嵌套 workspace 文件（Docker 内统一走根 workspace 安装）
 apps/site/pnpm-lock.yaml

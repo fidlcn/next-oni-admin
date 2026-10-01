@@ -7,8 +7,9 @@ import { BaseEntity } from './base.entity';
  * 仅由 nginx 在主站 /p/ 路径暴露，带 CSP）
  */
 @Entity('pagegen_records')
-@Index(['ip', 'createdAt'])
-@Index(['tokenId', 'createdAt'])
+// 索引名与迁移保持一致（20260930000000 / 20261002000000），避免 dev(synchronize) 与 prod(migration) 结构漂移
+@Index('idx_pagegen_ip_created', ['ip', 'createdAt'])
+@Index('idx_pagegen_tokenid_created', ['tokenId', 'createdAt'])
 export class PagegenRecord extends BaseEntity {
   @Column({
     name: 'page_id',

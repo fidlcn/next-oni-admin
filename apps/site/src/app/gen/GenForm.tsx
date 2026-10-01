@@ -33,6 +33,28 @@ interface RecentItem {
 const CODE_KEY = 'pagegen:code';
 const RECENT_KEY = 'pagegen:recent';
 
+/** 读取并校验「最近生成」缓存 —— localStorage 可被篡改/损坏，形状不对就整组丢弃 */
+function loadRecents(): RecentItem[] {
+  try {
+    const data = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    if (!Array.isArray(data)) return [];
+    return data
+      .filter(
+        (r): r is RecentItem =>
+          !!r && typeof r.pageId === 'string' && typeof r.status === 'string',
+      )
+      .map((r) => ({
+        pageId: r.pageId,
+        title: typeof r.title === 'string' ? r.title : '未命名页面',
+        status: r.status,
+        createdAt: typeof r.createdAt === 'number' ? r.createdAt : Date.now(),
+      }))
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
 const INVITE_FAIL_TEXT: Record<string, string> = {
   not_found: '邀请链接无效或已过期',
   disabled: '该邀请口令已被停用，请联系管理员',
@@ -73,14 +95,12 @@ export default function GenForm({ inviteCode }: { inviteCode?: string }) {
   const phaseRef = useRef<Phase>('idle');
   phaseRef.current = phase;
 
-  // 恢复本设备的口令与最近生成
+  // 恢复本设备的口令与最近生成（localStorage 只能在挂载后读，避免 SSR 水合不一致；
+  // effect 内 setState 属既有模式，豁免见 eslint.config.mjs）
   useEffect(() => {
     if (!inviteCode) setAccessCode(localStorage.getItem(CODE_KEY) || '');
-    try {
-      setRecents(JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'));
-    } catch {
-      setRecents([]);
-    }
+
+    setRecents(loadRecents());
   }, [inviteCode]);
 
   // 邀请页：校验口令有效性并取额度信息（无效则整页降级为提示卡）
@@ -116,6 +136,7 @@ export default function GenForm({ inviteCode }: { inviteCode?: string }) {
   useEffect(() => {
     if (phase !== 'generating' || !pageId) return;
 
+    // 新一轮轮询从 0 计时（轮询生命周期的一部分）
     setElapsed(0);
     const tick = setInterval(() => setElapsed((s) => s + 1), 1000);
 

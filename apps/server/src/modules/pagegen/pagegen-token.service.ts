@@ -140,33 +140,40 @@ export class PagegenTokenService {
 
   // ==================== 管理端 ====================
 
-  /** 批量创建口令（pageId 式随机码，唯一键冲突重试 3 次） */
+  /** 批量创建口令（随机码唯一键冲突重试 3 次；整体包事务，任一失败全部回滚不留半批） */
   async create(dto: CreatePagegenTokenDto, userId: number) {
     const count = dto.count ?? 1;
-    const created: PagegenToken[] = [];
-    for (let i = 0; i < count; i++) {
-      for (let retry = 0; retry < 3; retry++) {
-        const token = new PagegenToken();
-        Object.assign(token, {
-          code: genTokenCode(),
-          name: dto.name.trim(),
-          type: dto.type,
-          hourlyLimit: dto.type === 'long' ? dto.hourlyLimit : null,
-          maxUses: dto.type === 'short' ? dto.maxUses : null,
-          status: PAGEGEN_TOKEN_STATUS.ACTIVE,
-          createdBy: userId,
-        });
-        try {
-          created.push(await this.tokenRepo.save(token));
-          break;
-        } catch (error: any) {
-          if (error?.code !== 'ER_DUP_ENTRY') throw error;
+
+    const created = await this.tokenRepo.manager.transaction(
+      async (em): Promise<PagegenToken[]> => {
+        const results: PagegenToken[] = [];
+        for (let i = 0; i < count; i++) {
+          for (let retry = 0; retry < 3; retry++) {
+            const token = new PagegenToken();
+            Object.assign(token, {
+              code: genTokenCode(),
+              name: dto.name.trim(),
+              type: dto.type,
+              hourlyLimit: dto.type === 'long' ? dto.hourlyLimit : null,
+              maxUses: dto.type === 'short' ? dto.maxUses : null,
+              status: PAGEGEN_TOKEN_STATUS.ACTIVE,
+              createdBy: userId,
+            });
+            try {
+              results.push(await em.save(token));
+              break;
+            } catch (error: any) {
+              if (error?.code !== 'ER_DUP_ENTRY') throw error;
+            }
+          }
         }
-      }
-    }
-    if (created.length !== count) {
-      throw new Error('口令码生成冲突，请重试');
-    }
+        if (results.length !== count) {
+          throw new Error('口令码生成冲突，请重试');
+        }
+        return results;
+      },
+    );
+
     this.logger.log(
       `创建口令 ${created.length} 个 type=${dto.type} name=${dto.name}`,
     );

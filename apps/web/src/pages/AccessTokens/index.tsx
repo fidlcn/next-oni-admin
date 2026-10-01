@@ -58,6 +58,12 @@ export default function AccessTokens() {
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20 });
   const [filters, setFilters] = useState<any>({});
+
+  // 筛选变化时重置回第 1 页
+  const applyFilters = (patch: Record<string, unknown>) => {
+    setFilters((f: any) => ({ ...f, ...patch }));
+    setPagination((p) => ({ ...p, page: 1 }));
+  };
   const [revealed, setRevealed] = useState<Record<number, boolean>>({});
 
   const fetchList = async () => {
@@ -294,7 +300,7 @@ export default function AccessTokens() {
             placeholder="类型"
             allowClear
             style={{ width: 110 }}
-            onChange={(v) => setFilters({ ...filters, type: v })}
+            onChange={(v) => applyFilters({ type: v })}
             options={[
               { value: 'long', label: '长期' },
               { value: 'short', label: '短期' },
@@ -304,7 +310,7 @@ export default function AccessTokens() {
             placeholder="状态"
             allowClear
             style={{ width: 110 }}
-            onChange={(v) => setFilters({ ...filters, status: v })}
+            onChange={(v) => applyFilters({ status: v })}
             options={[
               { value: 'active', label: '启用中' },
               { value: 'disabled', label: '已停用' },

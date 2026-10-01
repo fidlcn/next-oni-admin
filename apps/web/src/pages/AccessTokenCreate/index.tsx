@@ -222,7 +222,7 @@ export default function AccessTokenCreate() {
             type="primary"
             icon={<KeyOutlined />}
             loading={creating}
-            onClick={handleCreate}
+            onClick={() => handleCreate().catch(() => undefined)}
           >
             生成口令
           </Button>

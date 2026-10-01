@@ -38,6 +38,12 @@ export default function ContentPage() {
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20 });
   const [filters, setFilters] = useState<any>({});
 
+  // 筛选变化时重置回第 1 页
+  const applyFilters = (patch: Record<string, unknown>) => {
+    setFilters((f: any) => ({ ...f, ...patch }));
+    setPagination((p) => ({ ...p, page: 1 }));
+  };
+
   const fetchList = async () => {
     setLoading(true);
     try {
@@ -165,7 +171,7 @@ export default function ContentPage() {
         <Space>
           <Input.Search
             placeholder="搜索标题"
-            onSearch={(v) => setFilters({ ...filters, keyword: v })}
+            onSearch={(v) => applyFilters({ keyword: v })}
             style={{ width: 200 }}
             allowClear
           />
@@ -173,7 +179,7 @@ export default function ContentPage() {
             placeholder="状态"
             allowClear
             style={{ width: 100 }}
-            onChange={(v) => setFilters({ ...filters, status: v })}
+            onChange={(v) => applyFilters({ status: v })}
             options={[
               { label: '草稿', value: 0 },
               { label: '已发布', value: 1 },
@@ -223,7 +229,7 @@ export default function ContentPage() {
       <Modal
         title={editItem ? '编辑内容' : '新增内容'}
         open={modalOpen}
-        onOk={handleSubmit}
+        onOk={() => handleSubmit().catch(() => undefined)}
         onCancel={() => setModalOpen(false)}
         width={720}
       >

@@ -7,8 +7,9 @@
 #
 # 端口：
 #   8080 → 管理后台 SPA + /v1 API（Nginx 统一入口）
-#   3000 → NestJS API 直连（Swagger: /api-docs）
-#   3001 → Next.js 主站
+#   3000 → NestJS API（仅本机调试用，绑定 127.0.0.1，不对外）
+#   3001 → Next.js 主站（仅本机调试用，绑定 127.0.0.1，不对外；
+#          直连此端口时 /v1 由 Next rewrites 转发到 API）
 #
 # MySQL 未暴露到宿主机，仅容器网络内可达。
 
@@ -23,9 +24,11 @@ services:
     container_name: oni-admin
     ports:
       - "8080:80"
-      - "3000:3000"
-      - "3001:3001"
+      # API/主站直连端口仅本机调试用：绑定回环，绕过容器 nginx 直连会丢失真实 IP
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
     environment:
+      NODE_ENV: production
       DB_HOST: mysql
       DB_PORT: "3306"
       DB_USERNAME: oni
@@ -37,6 +40,8 @@ services:
       JWT_ACCESS_EXPIRY: 2h
       JWT_REFRESH_EXPIRY: 7d
       CSRF_SECRET: ${CSRF_SECRET}
+      # 本地 Docker 经 http://localhost:8080 访问，Cookie 不能标 Secure（云上 https 部署改为 true）
+      COOKIE_SECURE: "false"
       CORS_ORIGIN: http://localhost:8080,http://localhost:3000,http://localhost:3001
       # ===== 托管页生成（pagegen）=====
       # GLM API Key —— 在 .env 里配置；留空则生成功能不可用
@@ -70,7 +75,8 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uoni", "-p${DB_PASSWORD}"]
+      # $$ 转义引用容器内环境变量，避免密码被 compose 插值写进 inspect 输出
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uoni -p\"$$MYSQL_PASSWORD\" --silent"]
       interval: 5s
       timeout: 5s
       retries: 30

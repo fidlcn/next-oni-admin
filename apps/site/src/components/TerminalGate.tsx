@@ -40,9 +40,12 @@ export default function TerminalGate({ onEnter }: { onEnter: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const runningRef = useRef(false);
   const routerRef = useRef(router);
-  routerRef.current = router;
   const onEnterRef = useRef(onEnter);
-  onEnterRef.current = onEnter;
+  // 回调/路由在事件回调里使用，经 effect 同步到 ref（渲染期不可写 ref）
+  useEffect(() => {
+    routerRef.current = router;
+    onEnterRef.current = onEnter;
+  }, [router, onEnter]);
 
   const appendLine = (cls = '') => {
     const line = { key: lineSeq++, cls, text: '' };
@@ -121,6 +124,7 @@ export default function TerminalGate({ onEnter }: { onEnter: () => void }) {
   }, [typeInto]);
 
   useEffect(() => {
+    // run 首步即 setState（终端开演），属"挂载即启动"的一次性初始化
     void run();
   }, [run]);
 

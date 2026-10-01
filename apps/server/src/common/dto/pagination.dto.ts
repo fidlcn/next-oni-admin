@@ -1,7 +1,7 @@
 import { IsOptional, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// 分页默认值 —— 与 packages/constants 保持同步
+// 分页默认值（与前端列表页约定一致）
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;

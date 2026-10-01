@@ -46,6 +46,11 @@ describe('PagegenTokenService', () => {
       remove: jest.fn(),
       query: jest.fn(),
     };
+    // create() 走事务批量创建 —— em.save 委托到 tokenRepo.save 便于断言
+    (tokenRepo as any).manager = {
+      transaction: async (fn: (em: any) => Promise<unknown>) =>
+        fn({ save: (t: PagegenToken) => tokenRepo.save(t) }),
+    };
     recordRepo = { count: jest.fn(), query: jest.fn() };
     configService = { get: jest.fn((_key: string, def: any) => def) };
     service = new PagegenTokenService(

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 
 import { Menu } from '../../entities/menu.entity';
 import { User } from '../../entities/user.entity';
+import { CreateMenuDto, UpdateMenuDto } from './dto/menu.dto';
 
 /**
  * 菜单服务 —— 构建前端动态菜单树
@@ -80,16 +81,34 @@ export class MenuService {
     return roots;
   }
 
-  /** 管理端 CRUD */
-  async create(dto: Partial<Menu>) {
-    const menu = this.menuRepo.create(dto);
+  /** 管理端 CRUD（显式字段拷贝，防止 mass-assignment） */
+  async create(dto: CreateMenuDto) {
+    const menu = new Menu();
+    menu.name = dto.name;
+    // path/icon/parentId/permissionCode 列可空，实体类型未标 null，统一 as any 赋值
+    (menu as any).path = dto.path ?? null;
+    (menu as any).icon = dto.icon ?? null;
+    (menu as any).parentId = dto.parentId ?? null;
+    menu.sort = dto.sort ?? 0;
+    menu.type = dto.type ?? 1;
+    menu.status = dto.status ?? 1;
+    (menu as any).permissionCode = dto.permissionCode ?? null;
     return this.menuRepo.save(menu);
   }
 
-  async update(id: number, dto: Partial<Menu>) {
+  async update(id: number, dto: UpdateMenuDto) {
     const menu = await this.menuRepo.findOne({ where: { id } });
     if (!menu) throw new NotFoundException('菜单不存在');
-    Object.assign(menu, dto);
+
+    if (dto.name !== undefined) menu.name = dto.name;
+    if (dto.path !== undefined) (menu as any).path = dto.path;
+    if (dto.icon !== undefined) (menu as any).icon = dto.icon;
+    if (dto.parentId !== undefined) (menu as any).parentId = dto.parentId;
+    if (dto.sort !== undefined) menu.sort = dto.sort;
+    if (dto.type !== undefined) menu.type = dto.type;
+    if (dto.status !== undefined) menu.status = dto.status;
+    if (dto.permissionCode !== undefined)
+      (menu as any).permissionCode = dto.permissionCode;
     return this.menuRepo.save(menu);
   }
 

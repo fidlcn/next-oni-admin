@@ -68,11 +68,19 @@ export class PagegenService implements OnModuleInit {
   // ==================== 生命周期 ====================
 
   async onModuleInit(): Promise<void> {
-    // 启动清扫：重启前进队/生成中的任务已随进程丢失，标记失败让用户重交
-    const swept = await this.repo.update(
-      { status: In([PAGEGEN_STATUS.PENDING, PAGEGEN_STATUS.GENERATING]) },
-      { status: PAGEGEN_STATUS.FAILED, error: '服务重启中断，请重新提交' },
-    );
+    // 启动清扫：重启前进队/生成中的任务已随进程丢失，标记失败让用户重交。
+    // 只清「陈旧」任务（updatedAt 超过 3 分钟没动静）：PM2 滚动重启时另一实例
+    // 可能仍在正常处理，把它的在途任务误杀；真丢的任务由 12 分钟看门狗兜底
+    const staleCutoff = new Date(Date.now() - 3 * 60 * 1000);
+    const swept = await this.repo
+      .createQueryBuilder()
+      .update(PagegenRecord)
+      .set({ status: PAGEGEN_STATUS.FAILED, error: '服务重启中断，请重新提交' })
+      .where('status IN (:...statuses) AND updatedAt < :cutoff', {
+        statuses: [PAGEGEN_STATUS.PENDING, PAGEGEN_STATUS.GENERATING],
+        cutoff: staleCutoff,
+      })
+      .execute();
     if (swept.affected) {
       this.logger.warn(`启动清扫：${swept.affected} 条中断任务标记为 failed`);
     }
@@ -94,7 +102,9 @@ export class PagegenService implements OnModuleInit {
   /** 看门狗收割：卡死任务 → failed */
   private async reapStuckTasks(): Promise<void> {
     try {
-      const cutoff = new Date(Date.now() - 12 * 60 * 1000);
+      // generating 超过 12 分钟未到终态（进程半死/异常链路等死角）→ 强制失败。
+      // 12 分钟 > 单次 GLM 上限 5 分钟
+      const generatingCutoff = new Date(Date.now() - 12 * 60 * 1000);
       const reaped = await this.repo
         .createQueryBuilder()
         .update(PagegenRecord)
@@ -104,11 +114,32 @@ export class PagegenService implements OnModuleInit {
         })
         .where('status = :status AND updatedAt < :cutoff', {
           status: PAGEGEN_STATUS.GENERATING,
-          cutoff,
+          cutoff: generatingCutoff,
         })
         .execute();
       if (reaped.affected) {
         this.logger.warn(`看门狗：${reaped.affected} 条卡死任务标记为超时失败`);
+      }
+
+      // pending 超过 5 分钟未开跑 = 所属实例已死（滚动重启后的孤儿），补刀收割。
+      // 正常任务入队后秒级开跑，5 分钟窗口足够宽
+      const pendingCutoff = new Date(Date.now() - 5 * 60 * 1000);
+      const orphaned = await this.repo
+        .createQueryBuilder()
+        .update(PagegenRecord)
+        .set({
+          status: PAGEGEN_STATUS.FAILED,
+          error: '服务重启中断，请重新提交',
+        })
+        .where('status = :status AND updatedAt < :cutoff', {
+          status: PAGEGEN_STATUS.PENDING,
+          cutoff: pendingCutoff,
+        })
+        .execute();
+      if (orphaned.affected) {
+        this.logger.warn(
+          `看门狗：${orphaned.affected} 条孤儿 pending 任务标记为失败`,
+        );
       }
     } catch (error) {
       this.logger.error(

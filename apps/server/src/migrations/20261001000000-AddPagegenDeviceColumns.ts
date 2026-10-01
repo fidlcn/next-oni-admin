@@ -7,6 +7,11 @@ import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 export class AddPagegenDeviceColumns20261001000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     const table = 'pagegen_records';
+    // 幂等守卫：列已存在（synchronize 建过的存量库）则跳过
+    if (await queryRunner.hasColumn(table, 'device_type')) {
+      return;
+    }
+
     await queryRunner.addColumn(
       table,
       new TableColumn({

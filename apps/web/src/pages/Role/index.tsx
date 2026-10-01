@@ -144,7 +144,7 @@ export default function RolePage() {
       <Modal
         title={editRole ? '编辑角色' : '新增角色'}
         open={modalOpen}
-        onOk={handleSubmit}
+        onOk={() => handleSubmit().catch(() => undefined)}
         onCancel={() => setModalOpen(false)}
       >
         <Form form={form} layout="vertical">

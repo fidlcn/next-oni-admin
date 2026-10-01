@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
@@ -18,7 +18,7 @@ import { RefreshToken } from '../../entities/refresh-token.entity';
 import { Role } from '../../entities/role.entity';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { CreateUserDto } from './dto/create-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 /**
  * 认证服务 —— 处理登录、注册、Token 刷新、登出
@@ -180,36 +180,6 @@ export class AuthService {
     return this.generateTokens(user);
   }
 
-  /** 管理员创建用户 —— 支持分配角色 */
-  async createUser(dto: CreateUserDto) {
-    const exists = await this.userRepo.findOne({
-      where: { username: dto.username },
-    });
-    if (exists) {
-      throw new BadRequestException('用户名已存在');
-    }
-
-    const plainPassword = this.decryptPassword(dto.password);
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
-    let roles: Role[] = [];
-
-    if (dto.roleIds && dto.roleIds.length > 0) {
-      roles = await this.roleRepo.findBy({ id: In(dto.roleIds) });
-    }
-
-    const user2 = new User();
-    user2.username = dto.username;
-    user2.password = hashedPassword;
-    (user2 as any).email = dto.email || null;
-    (user2 as any).phone = dto.phone || null;
-    user2.roles = roles;
-
-    await this.userRepo.save(user2);
-    // 返回时不包含密码
-    const { password: _pwd, ...result } = user2;
-    return result;
-  }
-
   /** 刷新 Access Token —— 用 Refresh Token 换新 Token */
   async refreshToken(token: string) {
     const storedToken = await this.refreshTokenRepo.findOne({
@@ -219,6 +189,13 @@ export class AuthService {
 
     if (!storedToken) {
       throw new UnauthorizedException('无效的刷新令牌');
+    }
+
+    // 用户已被禁用/删除：吊销全部令牌并拒绝刷新
+    if (!storedToken.user || storedToken.user.status !== 1) {
+      storedToken.revokedAt = new Date();
+      await this.refreshTokenRepo.save(storedToken);
+      throw new UnauthorizedException('账户不可用');
     }
 
     // 检查是否过期
@@ -244,6 +221,44 @@ export class AuthService {
       { userId, revokedAt: null as any },
       { revokedAt: new Date() },
     );
+  }
+
+  /**
+   * 修改自己的密码（登录态下）：
+   * 校验原密码 → 更新哈希 → 吊销全部 Refresh Token（其他设备下线）
+   * → 签发新令牌对返回，保住当前会话不中断
+   */
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      select: ['id', 'username', 'password', 'status'],
+    });
+    if (!user || user.status !== 1) {
+      throw new UnauthorizedException('登录状态已失效');
+    }
+
+    const oldPlain = this.decryptPassword(dto.oldPassword);
+    const matched = await bcrypt.compare(oldPlain, user.password);
+    if (!matched) {
+      throw new BadRequestException('原密码不正确');
+    }
+
+    const newPlain = this.decryptPassword(dto.newPassword);
+    if (newPlain.length < 8 || newPlain.length > 64) {
+      throw new BadRequestException('新密码长度需在 8-64 位之间');
+    }
+
+    await this.userRepo.update(user.id, {
+      password: await bcrypt.hash(newPlain, 10),
+    });
+
+    // 密码已变：旧 Refresh Token 全部作废
+    await this.refreshTokenRepo.update(
+      { userId: user.id, revokedAt: null as any },
+      { revokedAt: new Date() },
+    );
+
+    return this.generateTokens(user);
   }
 
   /** 生成 Access + Refresh Token 对 */

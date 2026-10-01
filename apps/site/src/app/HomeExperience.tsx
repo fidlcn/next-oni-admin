@@ -21,6 +21,7 @@ export default function HomeExperience() {
     } catch {
       // 隐私模式视为已进入
     }
+    // 客户端一次性初始化：sessionStorage 只能在挂载后读（豁免见 eslint.config.mjs）
     if (!seen) setSplash(true);
   }, []);
 

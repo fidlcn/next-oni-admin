@@ -10,6 +10,8 @@ import { doubleCsrf } from 'csrf-csrf';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { isSecureCookie } from './config/app.config';
+import { assertProductionEnv } from './config/env.validation';
 
 /**
  * 应用启动入口
@@ -25,13 +27,14 @@ export const {
   generateCsrfToken, // 生成 CSRF token
   doubleCsrfProtection, // Express 中间件
 } = doubleCsrf({
+  // 开发环境可用兜底值；生产环境由 assertProductionEnv 强制校验真实密钥
   getSecret: () =>
     process.env.CSRF_SECRET || 'csrf-secret-change-in-production',
   cookieName: 'csrf_token',
   cookieOptions: {
     sameSite: 'strict',
     path: '/',
-    secure: isProduction,
+    secure: isSecureCookie(),
     httpOnly: false, // 前端 JS 需要读取此 cookie
   },
   size: 64,
@@ -51,6 +54,9 @@ export const {
 });
 
 async function bootstrap() {
+  // 生产密钥校验必须最先执行：配置不对直接终止，避免带病上线
+  assertProductionEnv();
+
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
@@ -62,10 +68,13 @@ async function bootstrap() {
   // 全局路由前缀，所有接口变成 /v1/xxx
   app.setGlobalPrefix(prefix);
 
+  // 信任一级反代（nginx）：限流/日志才能拿到真实客户端 IP（X-Forwarded-For）
+  app.set('trust proxy', 1);
+
   // Cookie 解析中间件
   app.use(cookieParser());
 
-  // CORS 配置
+  // CORS 配置（未配置 CORS_ORIGIN 时不放开跨域）
   app.enableCors({
     origin: corsOrigin.split(','),
     credentials: true,
@@ -87,11 +96,22 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalExceptionFilter());
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  // 静态文件服务：上传的文件通过 /uploads/ 访问
-  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
+  // 静态文件服务：上传的文件通过 /uploads/ 访问。
+  // 上传内容不可信，叠加 nosniff + 沙箱 CSP（即使混入脚本也无法在同源执行/外连）
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+    setHeaders: (res) => {
+      res.set('X-Content-Type-Options', 'nosniff');
+      res.set('X-Frame-Options', 'DENY');
+      res.set(
+        'Content-Security-Policy',
+        "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'",
+      );
+    },
+  });
 
   // Swagger API 文档 —— 仅在非生产环境启用
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProduction) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('Next Oni Admin API')
       .setDescription('后台管理系统接口文档')
@@ -102,6 +122,9 @@ async function bootstrap() {
     SwaggerModule.setup('api-docs', app, document);
     logger.log(`Swagger docs: http://localhost:${port}/api-docs`);
   }
+
+  // 优雅停机：SIGTERM 时先断连接池再退出（PM2/Docker 滚动重启必备）
+  app.enableShutdownHooks();
 
   await app.listen(port);
   logger.log(`Server running on http://localhost:${port}${prefix}`);

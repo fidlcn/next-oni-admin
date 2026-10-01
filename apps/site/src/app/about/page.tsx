@@ -13,7 +13,7 @@ export default function AboutPage() {
         </h1>
         {/* 文案清空，二期补充 */}
         <p className="mt-8 font-mono text-xs tracking-widest text-gray-300">
-          // under construction
+          {'// under construction'}
         </p>
       </div>
     </div>

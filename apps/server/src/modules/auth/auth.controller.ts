@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Put,
   Body,
   Get,
   Res,
@@ -15,8 +16,10 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { generateCsrfToken } from '../../main';
+import { isSecureCookie } from '../../config/app.config';
 
 /**
  * 认证控制器 —— 处理登录、注册、Token 刷新、登出
@@ -30,6 +33,29 @@ export class AuthController {
   /** Cookie 通用选项 — 生产环境绑定 admin 子域名，防止主站读取 */
   private get cookieDomain() {
     return process.env.COOKIE_DOMAIN || undefined;
+  }
+
+  /** 令牌对写入 httpOnly cookie（Access 2h / Refresh 7d，路径收窄到使用范围） */
+  private setAuthCookies(
+    res: Response,
+    result: { accessToken: string; refreshToken: string },
+  ) {
+    res.cookie('access_token', result.accessToken, {
+      httpOnly: true,
+      secure: isSecureCookie(),
+      sameSite: 'strict',
+      domain: this.cookieDomain,
+      maxAge: 2 * 60 * 60 * 1000, // 2 小时
+      path: '/v1',
+    });
+    res.cookie('refresh_token', result.refreshToken, {
+      httpOnly: true,
+      secure: isSecureCookie(),
+      sameSite: 'strict',
+      domain: this.cookieDomain,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
+      path: '/v1/auth',
+    });
   }
 
   /** 获取 RSA 公钥 —— 前端用于加密登录密码 */
@@ -57,7 +83,7 @@ export class AuthController {
     // Access Token 写入 httpOnly cookie，2 小时有效
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecureCookie(),
       sameSite: 'strict',
       domain: this.cookieDomain,
       maxAge: 2 * 60 * 60 * 1000, // 2 小时
@@ -67,7 +93,7 @@ export class AuthController {
     // Refresh Token 写入 httpOnly cookie，7 天有效
     res.cookie('refresh_token', result.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecureCookie(),
       sameSite: 'strict',
       domain: this.cookieDomain,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
@@ -82,6 +108,20 @@ export class AuthController {
   @Post('register')
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  /** 修改自己的密码（原密码 + 新密码均 RSA 加密传输），成功后其他设备下线 */
+  @Put('change-password')
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ medium: { limit: 5, ttl: 60000 } })
+  async changePassword(
+    @Req() req: any,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.changePassword(req.user.id, dto);
+    this.setAuthCookies(res, result);
+    return { message: '密码已修改，其他设备已强制下线' };
   }
 
   @Post('refresh')
@@ -100,7 +140,7 @@ export class AuthController {
     // 轮换后新 Access Token 写回 cookie
     res.cookie('access_token', result.accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecureCookie(),
       sameSite: 'strict',
       domain: this.cookieDomain,
       maxAge: 2 * 60 * 60 * 1000,
@@ -110,7 +150,7 @@ export class AuthController {
     // 轮换后新 Refresh Token 写回 cookie
     res.cookie('refresh_token', result.refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecureCookie(),
       sameSite: 'strict',
       domain: this.cookieDomain,
       maxAge: 7 * 24 * 60 * 60 * 1000,

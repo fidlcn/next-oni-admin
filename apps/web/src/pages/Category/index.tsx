@@ -138,7 +138,7 @@ export default function CategoryPage() {
       <Modal
         title={editItem ? '编辑分类' : '新增分类'}
         open={modalOpen}
-        onOk={handleSubmit}
+        onOk={() => handleSubmit().catch(() => undefined)}
         onCancel={() => setModalOpen(false)}
       >
         <Form form={form} layout="vertical">
