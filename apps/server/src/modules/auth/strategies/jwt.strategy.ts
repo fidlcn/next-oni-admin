@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
@@ -38,7 +38,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!user || user.status !== 1) {
-      return null;
+      // 返回 null 会让 passport 视为认证通过（req.user = null），
+      // 后续依赖 req.user.id 的接口会 500 —— 必须显式抛 401
+      throw new UnauthorizedException('登录状态已失效，请重新登录');
     }
 
     return user;

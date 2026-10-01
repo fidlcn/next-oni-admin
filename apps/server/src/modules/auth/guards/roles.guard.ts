@@ -20,11 +20,13 @@ export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    // 从 @Roles 装饰器获取要求的角色列表
-    const requiredRoles = this.reflector.get<string[]>(
-      'roles',
+    // 从 @Roles 装饰器获取要求的角色列表。
+    // 必须用 getAllAndOverride 同时查方法级和类级 —— @Roles 常标在控制器类上
+    // （如 user/role/menu controller），只查 handler 会让类级标记静默失效
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>('roles', [
       context.getHandler(),
-    );
+      context.getClass(),
+    ]);
 
     // 没有 @Roles 装饰器，说明只要求登录
     if (!requiredRoles || requiredRoles.length === 0) {

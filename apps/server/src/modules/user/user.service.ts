@@ -9,7 +9,9 @@ import * as bcrypt from 'bcryptjs';
 
 import { User } from '../../entities/user.entity';
 import { Role } from '../../entities/role.entity';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import { RefreshToken } from '../../entities/refresh-token.entity';
+import { QueryUserDto } from './dto/query-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from '../auth/dto/create-user.dto';
 
 /**
@@ -23,10 +25,12 @@ export class UserService {
     private userRepo: Repository<User>,
     @InjectRepository(Role)
     private roleRepo: Repository<Role>,
+    @InjectRepository(RefreshToken)
+    private refreshTokenRepo: Repository<RefreshToken>,
   ) {}
 
   /** 分页查询用户列表，支持按用户名搜索 */
-  async findAll(dto: PaginationDto & { keyword?: string }) {
+  async findAll(dto: QueryUserDto) {
     const { page, pageSize, keyword } = dto;
     const where: any = {};
 
@@ -79,7 +83,7 @@ export class UserService {
     return user;
   }
 
-  /** 管理员创建用户 —— 支持 Assign roles */
+  /** 管理员创建用户 —— 支持分配角色 */
   async create(dto: CreateUserDto) {
     const exists = await this.userRepo.findOne({
       where: { username: dto.username },
@@ -107,46 +111,71 @@ export class UserService {
     return result;
   }
 
-  /** 更新用户信息（不含密码） */
-  async update(id: number, dto: Partial<User> & { roleIds?: number[] }) {
+  /** 更新用户信息（不含密码；显式字段拷贝，防止 mass-assignment） */
+  async update(id: number, dto: UpdateUserDto) {
     const user = await this.userRepo.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('用户不存在');
     }
 
-    // 如果传了 roleIds，更新角色关联
     if (dto.roleIds) {
-      const roles = await this.roleRepo.findBy({ id: In(dto.roleIds) });
-      user.roles = roles;
+      user.roles = await this.roleRepo.findBy({ id: In(dto.roleIds) });
     }
 
-    Object.assign(user, {
-      email: dto.email,
-      phone: dto.phone,
-      avatar: dto.avatar,
-      status: dto.status,
-    });
+    // email/phone/avatar 列可空，实体类型未标 null，沿用 as any 赋值
+    if (dto.email !== undefined) (user as any).email = dto.email;
+    if (dto.phone !== undefined) (user as any).phone = dto.phone;
+    if (dto.avatar !== undefined) (user as any).avatar = dto.avatar;
+    if (dto.status !== undefined) user.status = dto.status;
 
     await this.userRepo.save(user);
     const { password: _pwd2, ...result } = user;
     return result;
   }
 
-  /** 删除用户 */
-  async remove(id: number) {
-    const user = await this.userRepo.findOne({ where: { id } });
+  /** 删除用户 —— 禁止自删 / 删除最后一个管理员 */
+  async remove(id: number, operatorId?: number) {
+    if (operatorId && id === operatorId) {
+      throw new BadRequestException('不能删除当前登录的账号');
+    }
+
+    const user = await this.userRepo.findOne({
+      where: { id },
+      relations: ['roles'],
+    });
     if (!user) {
       throw new NotFoundException('用户不存在');
+    }
+
+    if (user.roles?.some((r) => r.name === 'admin')) {
+      const adminCount = await this.userRepo
+        .createQueryBuilder('u')
+        .innerJoin('u.roles', 'r')
+        .where('r.name = :name', { name: 'admin' })
+        .getCount();
+      if (adminCount <= 1) {
+        throw new BadRequestException('不能删除最后一个管理员账号');
+      }
     }
 
     await this.userRepo.remove(user);
     return { message: '删除成功' };
   }
 
-  /** 重置密码（管理员操作） */
+  /** 重置密码（管理员操作）—— 同时吊销该用户全部会话，防止旧会话残留 */
   async resetPassword(id: number, newPassword: string) {
+    const user = await this.userRepo.findOneBy({ id });
+    if (!user) {
+      throw new NotFoundException('用户不存在');
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userRepo.update(id, { password: hashedPassword });
+
+    await this.refreshTokenRepo.update(
+      { userId: id, revokedAt: null as any },
+      { revokedAt: new Date() },
+    );
     return { message: '密码已重置' };
   }
 }
