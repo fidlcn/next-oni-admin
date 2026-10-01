@@ -22,6 +22,7 @@ import {
   PublicListPagegenDto,
 } from './dto/list-query.dto';
 import { PagegenTokenService } from './pagegen-token.service';
+import { SiteUrlService } from './site-url.service';
 import { GlmService, pickValidTags } from './services/glm.service';
 import { SanitizeService } from './services/sanitize.service';
 import { parseDeviceMeta } from './device-meta';
@@ -55,6 +56,7 @@ export class PagegenService implements OnModuleInit {
     private sanitizeService: SanitizeService,
     private configService: ConfigService,
     private tokenService: PagegenTokenService,
+    private siteUrl: SiteUrlService,
   ) {
     // 生成页目录：项目根 pages/（uploads 之外，仅由 nginx /p/ 暴露）
     this.pagesDir = path.join(process.cwd(), 'pages');
@@ -415,7 +417,7 @@ export class PagegenService implements OnModuleInit {
       error: record.error,
       url:
         record.status === PAGEGEN_STATUS.DONE
-          ? this.publicUrl(record.pageId)
+          ? this.siteUrl.pageUrl(record.pageId)
           : undefined,
     };
   }
@@ -485,7 +487,10 @@ export class PagegenService implements OnModuleInit {
     // 管理端（admin 域名）才能正确跳转到主站 /p/ 路径
     const withUrl = list.map((r) => ({
       ...r,
-      url: r.status === PAGEGEN_STATUS.DONE ? this.publicUrl(r.pageId) : null,
+      url:
+        r.status === PAGEGEN_STATUS.DONE
+          ? this.siteUrl.pageUrl(r.pageId)
+          : null,
       token: r.tokenId ? (tokenNames.get(r.tokenId) ?? null) : null,
     }));
 
@@ -544,7 +549,10 @@ export class PagegenService implements OnModuleInit {
       tokenName: r.tokenId
         ? (recentNames.get(r.tokenId)?.name ?? '已删除口令')
         : '管理员',
-      url: r.status === PAGEGEN_STATUS.DONE ? this.publicUrl(r.pageId) : null,
+      url:
+        r.status === PAGEGEN_STATUS.DONE
+          ? this.siteUrl.pageUrl(r.pageId)
+          : null,
       createdAt: r.createdAt,
       durationMs:
         r.status === PAGEGEN_STATUS.DONE || r.status === PAGEGEN_STATUS.FAILED
@@ -614,13 +622,8 @@ export class PagegenService implements OnModuleInit {
       cost: Math.round(cost * 10000) / 10000,
       diskBytes,
       fileCount,
-      // 主站 /gen 生成页地址：由 PAGEGEN_PUBLIC_BASE_URL（如 https://www.fidlcn.site/p）
-      // 推导主站 origin，管理端「去生成页」跳转用它，前端不再写死域名
-      genUrl: `${(
-        this.configService.get<string>('PAGEGEN_PUBLIC_BASE_URL', '/p') || '/p'
-      )
-        .replace(/\/+$/, '')
-        .replace(/\/p$/, '')}/gen`,
+      // 主站 /gen 生成页地址（SiteUrlService 统一推导，见 site-url.service.ts）
+      genUrl: this.siteUrl.genUrl(),
     };
   }
 
@@ -704,15 +707,6 @@ export class PagegenService implements OnModuleInit {
 
     await this.repo.remove(record);
     return { message: '删除成功' };
-  }
-
-  // ==================== 工具 ====================
-
-  private publicUrl(pageId: string): string {
-    const base = (
-      this.configService.get<string>('PAGEGEN_PUBLIC_BASE_URL', '/p') || '/p'
-    ).replace(/\/+$/, '');
-    return `${base}/${pageId}.html`;
   }
 }
 

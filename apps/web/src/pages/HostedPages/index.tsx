@@ -34,6 +34,7 @@ import {
   PAGEGEN_STYLE_LABELS,
   PAGEGEN_STATUS_META,
 } from '@/services/pagegen';
+import { siteUrl } from '@/utils/siteUrl';
 
 /** 字节转可读大小 */
 function formatBytes(bytes: number): string {
@@ -60,13 +61,8 @@ function suffix(text: string) {
 /**
  * 托管页列表 —— 公开 H5 提交生成的 HTML 页面托管在此
  * 顶部统计卡片（今日生成/失败率/费用估算/磁盘占用）+ 列表（提示词查看/跳转/删除）
+ * 站外跳链（去生成页 / 托管页 /p/）统一走 siteUrl()，不在本页维护域名
  */
-
-/**
- * 主站 /gen 生成页地址：优先用后端 stats 下发的 genUrl（来自
- * PAGEGEN_PUBLIC_BASE_URL，生产为线上主站域名）；仅本地开发兜底 3001
- */
-const DEV_GEN_URL = 'http://localhost:3001/gen';
 export default function HostedPages() {
   const [list, setList] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -122,7 +118,7 @@ export default function HostedPages() {
       width: 150,
       render: (v: string, record: any) =>
         record.url ? (
-          <a href={record.url} target="_blank" rel="noreferrer">
+          <a href={siteUrl(record.url)} target="_blank" rel="noreferrer">
             <LinkOutlined /> {v}
           </a>
         ) : (
@@ -273,15 +269,7 @@ export default function HostedPages() {
           />
           <Button
             icon={<FormOutlined />}
-            onClick={() =>
-              window.open(
-                typeof stats?.genUrl === 'string' &&
-                  stats.genUrl.startsWith('http')
-                  ? stats.genUrl
-                  : DEV_GEN_URL,
-                '_blank',
-              )
-            }
+            onClick={() => window.open(siteUrl(stats?.genUrl), '_blank')}
           >
             去生成页
           </Button>
@@ -393,8 +381,8 @@ export default function HostedPages() {
             </Descriptions.Item>
             <Descriptions.Item label="pageId" span={2}>
               {detail.url ? (
-                <a href={detail.url} target="_blank" rel="noreferrer">
-                  <LinkOutlined /> {detail.url}
+                <a href={siteUrl(detail.url)} target="_blank" rel="noreferrer">
+                  <LinkOutlined /> {siteUrl(detail.url)}
                 </a>
               ) : (
                 detail.pageId

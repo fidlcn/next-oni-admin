@@ -18,6 +18,7 @@ import {
   UpdatePagegenTokenDto,
   AdminListPagegenTokenDto,
 } from './dto/token.dto';
+import { SiteUrlService } from './site-url.service';
 import {
   PAGEGEN_TOKEN_STATUS,
   PAGEGEN_TOKEN_CODE_LENGTH,
@@ -48,6 +49,7 @@ export class PagegenTokenService {
     @InjectRepository(PagegenRecord)
     private recordRepo: Repository<PagegenRecord>,
     private configService: ConfigService,
+    private siteUrl: SiteUrlService,
   ) {}
 
   // ==================== 提交校验链 ====================
@@ -281,16 +283,6 @@ export class PagegenTokenService {
 
   // ==================== 工具 ====================
 
-  /** 邀请短链：主站 origin（由 PAGEGEN_PUBLIC_BASE_URL 推导）+ /g/{code} */
-  inviteUrl(code: string): string {
-    const origin = (
-      this.configService.get<string>('PAGEGEN_PUBLIC_BASE_URL', '/p') || '/p'
-    )
-      .replace(/\/+$/, '')
-      .replace(/\/p$/, '');
-    return `${origin}/g/${code}`;
-  }
-
   /** 汇总使用统计：一次 GROUP BY 查出 total / today / hour */
   async usageForIds(ids: number[]): Promise<Map<number, TokenUsage>> {
     const map = new Map(ids.map((id) => [id, { total: 0, today: 0, hour: 0 }]));
@@ -347,7 +339,7 @@ export class PagegenTokenService {
       remaining,
       hourRemaining,
       deviceLocked: this.isDeviceLocked(t),
-      inviteUrl: this.inviteUrl(t.code),
+      inviteUrl: this.siteUrl.inviteUrl(t.code),
       derivedStatus,
     };
   }

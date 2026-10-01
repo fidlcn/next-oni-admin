@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 import { PagegenTokenService } from '../pagegen-token.service';
+import { SiteUrlService } from '../site-url.service';
 import { PagegenToken } from '../../../entities/pagegen-token.entity';
 
 /** 构造一个口令实体（测试用） */
@@ -47,7 +48,12 @@ describe('PagegenTokenService', () => {
     };
     recordRepo = { count: jest.fn(), query: jest.fn() };
     configService = { get: jest.fn((_key: string, def: any) => def) };
-    service = new PagegenTokenService(tokenRepo, recordRepo, configService);
+    service = new PagegenTokenService(
+      tokenRepo,
+      recordRepo,
+      configService,
+      new SiteUrlService(configService as any),
+    );
   });
 
   describe('assertUsable（额度/频次校验）', () => {

@@ -30,13 +30,7 @@ import {
   PAGEGEN_TOKEN_STATE_META,
   type PagegenTokenItem,
 } from '@/services/pagegen';
-
-/** 邀请短链本地开发兜底（后端 PAGEGEN_PUBLIC_BASE_URL 为相对路径时）；空值防御 */
-function absInviteUrl(url: string | undefined): string {
-  if (!url) return '';
-  if (url.startsWith('http')) return url;
-  return `http://localhost:3001${url}`;
-}
+import { siteUrl } from '@/utils/siteUrl';
 
 async function copyText(text: string, label: string) {
   try {
@@ -228,14 +222,14 @@ export default function AccessTokens() {
       width: 220,
       render: (v: string) => (
         <Space size={4}>
-          <a href={absInviteUrl(v)} target="_blank" rel="noreferrer">
-            {absInviteUrl(v).replace(/^https?:\/\//, '')}
+          <a href={siteUrl(v)} target="_blank" rel="noreferrer">
+            {siteUrl(v).replace(/^https?:\/\//, '')}
           </a>
           <Button
             size="small"
             type="text"
             icon={<CopyOutlined />}
-            onClick={() => copyText(absInviteUrl(v), '邀请短链')}
+            onClick={() => copyText(siteUrl(v), '邀请短链')}
           />
         </Space>
       ),
