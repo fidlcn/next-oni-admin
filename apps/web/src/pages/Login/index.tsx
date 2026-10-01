@@ -3,6 +3,7 @@ import { Form, Input, Button, Card, Typography, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth';
+import { fetchPublicKey, encryptWithKey } from '@/utils/rsa';
 
 const { Title } = Typography;
 
@@ -16,39 +17,6 @@ const { Title } = Typography;
  *   - 密码在传输过程中始终为密文，即使 HTTPS 被截获也无法还原明文
  */
 
-/** 将 ArrayBuffer 转为 base64 字符串 */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-/** 从 PEM 格式字符串导入 RSA 公钥 */
-async function importPublicKey(pem: string): Promise<CryptoKey> {
-  // 提取 PEM 中的 base64 部分
-  const b64 = pem
-    .replace(/-----BEGIN PUBLIC KEY-----/, '')
-    .replace(/-----END PUBLIC KEY-----/, '')
-    .replace(/\s/g, '');
-
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-
-  return crypto.subtle.importKey(
-    'spki',
-    bytes.buffer,
-    { name: 'RSA-OAEP', hash: 'SHA-256' },
-    false,
-    ['encrypt'],
-  );
-}
-
 export default function Login() {
   const [loading, setLoading] = useState(false);
   const [publicKey, setPublicKey] = useState<CryptoKey | null>(null);
@@ -61,18 +29,12 @@ export default function Login() {
 
   // 页面加载时获取 RSA 公钥 + CSRF Token
   useEffect(() => {
-    // 并行获取公钥和 CSRF token
+    // 并行获取 RSA 公钥与 CSRF token（后者只为预热 cookie）
     Promise.all([
-      fetch('/v1/auth/public-key').then((res) => res.json()),
-      fetch('/v1/auth/csrf-token', { credentials: 'include' }).then((res) =>
-        res.json(),
-      ),
+      fetchPublicKey(),
+      fetch('/v1/auth/csrf-token', { credentials: 'include' }),
     ])
-      .then(async ([keyData]) => {
-        // API 响应格式: { code: 0, data: { publicKey: "..." } }
-        const key = await importPublicKey(keyData.data.publicKey);
-        setPublicKey(key);
-      })
+      .then(([key]) => setPublicKey(key))
       .catch(() => {
         message.error('安全模块加载失败，请刷新页面');
       });
@@ -90,13 +52,10 @@ export default function Login() {
     setLoading(true);
     try {
       // 用 RSA-OAEP 加密密码
-      const encoder = new TextEncoder();
-      const encrypted = await crypto.subtle.encrypt(
-        { name: 'RSA-OAEP' },
+      const encryptedPassword = await encryptWithKey(
         publicKey,
-        encoder.encode(values.password),
+        values.password,
       );
-      const encryptedPassword = arrayBufferToBase64(encrypted);
 
       await login(values.username, encryptedPassword);
       message.success('登录成功');

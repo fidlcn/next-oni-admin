@@ -10,6 +10,8 @@ export function uploadMedia(file: File) {
   formData.append('file', file);
   return request.post('/media/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    // 10MB 文件在慢网络下 15s 全局超时会中断，上传单独放宽到 120s
+    timeout: 120000,
   });
 }
 

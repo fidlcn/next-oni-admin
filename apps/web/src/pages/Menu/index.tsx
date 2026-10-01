@@ -150,7 +150,7 @@ export default function MenuPage() {
       <Modal
         title={editMenu ? '编辑菜单' : '新增菜单'}
         open={modalOpen}
-        onOk={handleSubmit}
+        onOk={() => handleSubmit().catch(() => undefined)}
         onCancel={() => setModalOpen(false)}
       >
         <Form form={form} layout="vertical">

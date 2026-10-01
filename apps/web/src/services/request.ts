@@ -1,4 +1,8 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  AxiosError,
+  AxiosRequestConfig,
+  InternalAxiosRequestConfig,
+} from 'axios';
 import { message } from 'antd';
 import { getCsrfToken } from '@/utils/token';
 
@@ -7,6 +11,14 @@ import { getCsrfToken } from '@/utils/token';
  * Access Token 和 Refresh Token 均通过 httpOnly cookie 自动携带
  * CSRF Token 通过非 httpOnly cookie 读取，附加到请求头
  */
+
+// 扩展 axios 配置：skipAuthRedirect 标记"静默"请求（如启动时的 profile 探测），
+// 401 时不尝试刷新、也不把匿名访客踢去 /login
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    skipAuthRedirect?: boolean;
+  }
+}
 
 const request = axios.create({
   baseURL: '/v1',
@@ -48,6 +60,11 @@ request.interceptors.response.use(
     const status = error.response?.status;
 
     if (status === 401) {
+      // 静默请求（启动时的登录态探测）直接失败，不刷新、不跳转
+      if (error.config?.skipAuthRedirect) {
+        return Promise.reject(error);
+      }
+
       // Access Token 过期，尝试刷新（Refresh Token 在 cookie 中自动携带）
       try {
         // 刷新请求需要携带 CSRF Token
@@ -57,10 +74,12 @@ request.interceptors.response.use(
           headers['X-CSRF-Token'] = csrfToken;
         }
 
-        await axios.post('/v1/auth/refresh', null, {
+        const refreshConfig: AxiosRequestConfig = {
           withCredentials: true,
           headers,
-        });
+          skipAuthRedirect: true, // 刷新自身失败时不要递归重试
+        };
+        await axios.post('/v1/auth/refresh', null, refreshConfig);
 
         // 刷新成功，重试原请求（新 Access Token 已通过 Set-Cookie 写入）
         return request(error.config!);
@@ -74,9 +93,24 @@ request.interceptors.response.use(
     }
 
     if (status === 403) {
-      // CSRF 验证失败时也返回 403，给出更明确的提示
+      // CSRF 校验失败：csrf cookie 是会话级的，浏览器重启后丢失（refresh cookie 还在）。
+      // 自动补拉一次 csrf-token 并重试原请求，避免用户被迫回登录页
       const errorMsg = error.response?.data?.message;
       if (errorMsg?.includes('CSRF') || errorMsg?.includes('csrf')) {
+        if (!(error.config as any)?.__csrfRetried) {
+          try {
+            await axios.get('/v1/auth/csrf-token', { withCredentials: true });
+            const newCsrf = getCsrfToken();
+            if (newCsrf && error.config) {
+              (error.config as any).__csrfRetried = true;
+              error.config.headers = error.config.headers || {};
+              error.config.headers.set?.('X-CSRF-Token', newCsrf);
+              return request(error.config);
+            }
+          } catch {
+            // 补拉失败走统一提示
+          }
+        }
         message.error('安全验证失败，请刷新页面重试');
       } else {
         message.error('权限不足');

@@ -187,7 +187,10 @@ export default function UserPage() {
         <Space>
           <Input.Search
             placeholder="搜索用户名"
-            onSearch={setKeyword}
+            onSearch={(v) => {
+              setKeyword(v);
+              setPagination((p) => ({ ...p, page: 1 }));
+            }}
             style={{ width: 200 }}
             allowClear
           />
@@ -220,7 +223,7 @@ export default function UserPage() {
       <Modal
         title={editUser ? '编辑用户' : '新增用户'}
         open={modalOpen}
-        onOk={handleSubmit}
+        onOk={() => handleSubmit().catch(() => undefined)}
         onCancel={() => setModalOpen(false)}
       >
         <Form form={form} layout="vertical">

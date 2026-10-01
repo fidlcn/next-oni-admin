@@ -34,12 +34,23 @@ export async function register(
   return data.user as UserInfo;
 }
 
-/** 获取当前用户信息（前端初始化时调用） */
+/** 获取当前用户信息（前端初始化时调用；静默失败，不触发登录跳转） */
 export async function getProfile() {
-  return request.get('/auth/profile') as Promise<UserInfo>;
+  return request.get('/auth/profile', {
+    skipAuthRedirect: true,
+  }) as Promise<UserInfo>;
 }
 
 /** 登出 — 服务端自动清除 cookie */
 export async function logout() {
   await request.post('/auth/logout');
+}
+
+/** 修改自己的密码（原/新密码均为 RSA 加密后的密文） */
+export async function changePassword(params: {
+  oldPassword: string;
+  newPassword: string;
+}) {
+  const data: any = await request.put('/auth/change-password', params);
+  return data as { message: string };
 }
