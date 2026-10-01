@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { PagegenRecord } from '../../entities/pagegen-record.entity';
+import { PagegenToken } from '../../entities/pagegen-token.entity';
 import { AuthModule } from '../auth/auth.module';
 import { PagegenService } from './pagegen.service';
+import { PagegenTokenService } from './pagegen-token.service';
 import { PagegenController } from './pagegen.controller';
 import { GlmService } from './services/glm.service';
 import { SanitizeService } from './services/sanitize.service';
@@ -13,9 +15,12 @@ import { SanitizeService } from './services/sanitize.service';
  * 公开目录 / 管理端「托管页管理」共用本模块
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([PagegenRecord]), AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([PagegenRecord, PagegenToken]),
+    AuthModule,
+  ],
   controllers: [PagegenController],
-  providers: [PagegenService, GlmService, SanitizeService],
-  exports: [PagegenService],
+  providers: [PagegenService, PagegenTokenService, GlmService, SanitizeService],
+  exports: [PagegenService, PagegenTokenService],
 })
 export class PagegenModule {}

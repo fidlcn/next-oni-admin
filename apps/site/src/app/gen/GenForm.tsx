@@ -10,9 +10,18 @@ import {
   api,
   pageUrl,
   beaconView,
+  getDeviceId,
+  tokenInfo,
+  type PagegenTokenInfo,
 } from '@/lib/pagegen';
 
 type Phase = 'idle' | 'generating' | 'done' | 'failed';
+
+/** /g 邀请链接的口令状态：校验中 / 可用 / 失效（含原因） */
+interface InviteState {
+  phase: 'none' | 'checking' | 'ok' | 'invalid';
+  info?: PagegenTokenInfo;
+}
 
 interface RecentItem {
   pageId: string;
@@ -23,6 +32,12 @@ interface RecentItem {
 
 const CODE_KEY = 'pagegen:code';
 const RECENT_KEY = 'pagegen:recent';
+
+const INVITE_FAIL_TEXT: Record<string, string> = {
+  not_found: '邀请链接无效或已过期',
+  disabled: '该邀请口令已被停用，请联系管理员',
+  exhausted: '该邀请口令的生成额度已用完',
+};
 
 /** 时间驱动的阶段文案（真实进度 API 不存在，用已等待时长模拟） */
 function stageText(seconds: number): string {
@@ -36,8 +51,9 @@ function stageText(seconds: number): string {
 /**
  * 生成表单 —— 尽量精简：风格 + 内容 + 口令三字段。
  * 标题与标签由 AI 决定：标题自拟（元数据注释回传），标签在预设范围内挑选。
+ * 传入 inviteCode 时为 /g 邀请页模式：口令自动生效并展示剩余额度。
  */
-export default function GenForm() {
+export default function GenForm({ inviteCode }: { inviteCode?: string }) {
   const [style, setStyle] = useState<string>('auto');
   const [content, setContent] = useState('');
   const [accessCode, setAccessCode] = useState('');
@@ -50,19 +66,41 @@ export default function GenForm() {
   const [submitting, setSubmitting] = useState(false);
   const [recents, setRecents] = useState<RecentItem[]>([]);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
+  const [invite, setInvite] = useState<InviteState>({
+    phase: inviteCode ? 'checking' : 'none',
+  });
 
   const phaseRef = useRef<Phase>('idle');
   phaseRef.current = phase;
 
   // 恢复本设备的口令与最近生成
   useEffect(() => {
-    setAccessCode(localStorage.getItem(CODE_KEY) || '');
+    if (!inviteCode) setAccessCode(localStorage.getItem(CODE_KEY) || '');
     try {
       setRecents(JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'));
     } catch {
       setRecents([]);
     }
-  }, []);
+  }, [inviteCode]);
+
+  // 邀请页：校验口令有效性并取额度信息（无效则整页降级为提示卡）
+  useEffect(() => {
+    if (!inviteCode) return;
+    let stopped = false;
+    tokenInfo(inviteCode)
+      .then((info) => {
+        if (stopped) return;
+        setInvite(
+          info.valid ? { phase: 'ok', info } : { phase: 'invalid', info },
+        );
+      })
+      .catch(() => {
+        if (!stopped) setInvite({ phase: 'ok' });
+      });
+    return () => {
+      stopped = true;
+    };
+  }, [inviteCode]);
 
   // 正文 placeholder 示例轮播
   useEffect(() => {
@@ -191,18 +229,20 @@ export default function GenForm() {
     e.preventDefault();
     setError('');
 
+    const code = (inviteCode || accessCode).trim();
     if (!content.trim()) return setError('请描述你想要的页面内容');
-    if (!accessCode.trim()) return setError('请填写访问口令');
+    if (!code) return setError('请填写访问口令');
 
     setSubmitting(true);
     try {
-      localStorage.setItem(CODE_KEY, accessCode.trim());
+      if (!inviteCode) localStorage.setItem(CODE_KEY, code);
       const data = await api<{ pageId: string }>('/v1/pagegen/submit', {
         method: 'POST',
         body: JSON.stringify({
           style,
           content: content.trim(),
-          accessCode: accessCode.trim(),
+          accessCode: code,
+          deviceId: getDeviceId(),
         }),
       });
       setPageId(data.pageId);
@@ -227,6 +267,21 @@ export default function GenForm() {
   };
 
   const generating = phase === 'generating';
+
+  // 邀请链接口令失效：整页降级为提示卡，不再展示表单
+  if (invite.phase === 'invalid') {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
+        <p className="text-base font-semibold text-gray-900">
+          {INVITE_FAIL_TEXT[invite.info?.reason || 'not_found'] ||
+            '邀请链接不可用'}
+        </p>
+        <p className="mt-2 text-sm text-gray-500">
+          请联系管理员获取新的邀请链接。
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -283,21 +338,49 @@ export default function GenForm() {
           />
         </div>
 
-        {/* 口令 —— 明文显示：共享口令无需遮掩，手机上更好核对 */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium text-gray-700">
-            访问口令
-          </label>
-          <input
-            type="text"
-            value={accessCode}
-            onChange={(e) => setAccessCode(e.target.value)}
-            maxLength={128}
-            disabled={generating}
-            placeholder="向页面管理员获取"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 disabled:bg-gray-50"
-          />
-        </div>
+        {/* 口令：邀请页模式自动生效并展示额度；普通模式明文输入（共享口令无需遮掩） */}
+        {inviteCode ? (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+            {invite.phase === 'checking' ? (
+              <span className="text-sm text-gray-500">正在验证邀请口令…</span>
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <span className="font-medium text-gray-900">
+                  邀请口令已生效
+                </span>
+                {invite.info?.type === 'short' ? (
+                  <span className="text-gray-500">
+                    剩余 {invite.info.remainingUses} / {invite.info.maxUses} 条
+                  </span>
+                ) : invite.info?.type === 'long' ? (
+                  <span className="text-gray-500">
+                    每小时最多 {invite.info.hourlyLimit} 条
+                  </span>
+                ) : null}
+                {invite.info?.deviceLocked && (
+                  <span className="text-xs text-amber-600">
+                    （该口令正被其他设备使用，提交可能被拒绝）
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">
+              访问口令
+            </label>
+            <input
+              type="text"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+              maxLength={128}
+              disabled={generating}
+              placeholder="向页面管理员获取"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-gray-900 focus:ring-1 focus:ring-gray-900 disabled:bg-gray-50"
+            />
+          </div>
+        )}
 
         {error && phase !== 'done' && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">

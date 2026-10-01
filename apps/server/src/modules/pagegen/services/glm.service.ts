@@ -6,6 +6,7 @@ import {
   PAGEGEN_STYLES,
   PAGEGEN_TAG_VALUES,
   PAGEGEN_MAX_TAGS,
+  PAGEGEN_TITLE_MAX,
 } from '../pagegen.constants';
 
 /** GLM 生成输入（title/tags 由 AI 决定时为空，风格保留用户选择） */
@@ -37,7 +38,8 @@ const TAG_RANGE = PAGEGEN_TAGS.map((t) => `${t.value}=${t.label}`).join(', ');
 const SYSTEM_PROMPT = `你是一名资深网页设计师与前端工程师。根据用户输入生成一个完整的 HTML5 单页，严格遵守：
 
 1. 输出分两部分：第一行是一行元数据注释（单行合法 JSON，见下），换行后输出完整 HTML 文档（<!DOCTYPE html> 开始、</html> 结束）；不要任何解释文字、不要 markdown 代码围栏。
-2. 元数据注释格式固定为：<!--pagegen:{"title":"页面标题","tags":["标签值"]}>
+2. 元数据注释格式固定为：<!--pagegen:{"title":"页面标题","tags":["标签值"]}-->
+   （注意结尾是两个短横线加右尖括号 -->）
    - title：用户提供了标题就用用户的；没提供就自拟一个简洁有力的中文标题（20 字以内）；
    - tags：从以下范围中选择 1-3 个最贴合内容的标签值（英文值，不要中文）——${TAG_RANGE}。
 3. 【禁止联网】不得引用任何外部脚本、字体、图标库、CSS 框架、CDN 资源；不得编造或引用任何网络来源。
@@ -71,14 +73,27 @@ export function extractHtml(raw: string): string {
   throw new Error('模型未返回有效的 HTML 文档');
 }
 
-/** 解析元数据注释 <!--pagegen:{"title":"..","tags":[..]}-->（容错：缺失/非法 JSON 返回空），纯函数便于单测 */
+/**
+ * 解析元数据注释 <!--pagegen:{"title":"..","tags":[..]}-->（容错：缺失/非法 JSON 返回空），纯函数便于单测。
+ * 不依赖注释终止符：模型可能丢掉结束符的第二个 '-'（提示词示例曾诱发此格式），
+ * 直接截取 pagegen: 之后同一行内的 {...}（注释约定单行，JSON 无嵌套花括号）。
+ * 标题统一截断到库表列宽，避免 DB 侧 Data too long。
+ */
 export function extractMeta(raw: string): { title?: string; tags?: string[] } {
-  const m = (raw || '').match(/<!--\s*pagegen:([\s\S]*?)-->/i);
-  if (!m) return {};
+  if (!raw) return {};
+
+  const line = raw.match(/pagegen:\s*(\{.*\})/);
+  const legacy = line ? null : raw.match(/<!--\s*pagegen:([\s\S]*?)-->/i);
+  const jsonText = (line?.[1] || legacy?.[1] || '').trim();
+  if (!jsonText) return {};
+
   try {
-    const json = JSON.parse(m[1].trim());
+    const json = JSON.parse(jsonText);
     return {
-      title: typeof json.title === 'string' ? json.title : undefined,
+      title:
+        typeof json.title === 'string'
+          ? json.title.trim().slice(0, PAGEGEN_TITLE_MAX)
+          : undefined,
       tags: Array.isArray(json.tags) ? json.tags : undefined,
     };
   } catch {
@@ -226,10 +241,18 @@ export class GlmService {
         throw new Error('GLM 返回内容为空');
       }
 
+      const html = extractHtml(content);
       const meta = extractMeta(content);
+      // 注释缺失/解析失败时的兜底：模型在 HTML <title> 里写的也是它自拟的标题
+      const htmlTitle = html
+        .match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]
+        ?.trim();
+
       return {
-        html: extractHtml(content),
-        title: meta.title,
+        html,
+        title:
+          meta.title ||
+          (htmlTitle ? htmlTitle.slice(0, PAGEGEN_TITLE_MAX) : undefined),
         tags: meta.tags,
         tokensIn: json?.usage?.prompt_tokens ?? 0,
         tokensOut: json?.usage?.completion_tokens ?? 0,

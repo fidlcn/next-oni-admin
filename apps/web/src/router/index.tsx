@@ -15,6 +15,9 @@ import CategoryPage from '@/pages/Category';
 import MediaPage from '@/pages/Media';
 import SettingsPage from '@/pages/Settings';
 import HostedPages from '@/pages/HostedPages';
+import HostedPagesOverview from '@/pages/HostedPagesOverview';
+import AccessTokens from '@/pages/AccessTokens';
+import AccessTokenCreate from '@/pages/AccessTokenCreate';
 
 const routeConfig = [
   {
@@ -39,6 +42,9 @@ const routeConfig = [
       { path: 'categories', element: <CategoryPage /> },
       { path: 'media', element: <MediaPage /> },
       { path: 'hosted-pages', element: <HostedPages /> },
+      { path: 'hosted-pages/overview', element: <HostedPagesOverview /> },
+      { path: 'access-tokens', element: <AccessTokens /> },
+      { path: 'access-tokens/create', element: <AccessTokenCreate /> },
       { path: 'users', element: <UserPage /> },
       { path: 'roles', element: <RolePage /> },
       { path: 'menus', element: <MenuPage /> },

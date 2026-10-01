@@ -51,6 +51,12 @@ export class SubmitPagegenDto {
   @IsString()
   @MaxLength(128)
   accessCode: string;
+
+  /** 提交设备 ID（前端 localStorage 持久化的 uuid，用于口令单设备独占） */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  deviceId?: string;
 }
 
 /** 供 Swagger 展示的选项说明（运行时校验以常量为准） */

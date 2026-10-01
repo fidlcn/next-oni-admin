@@ -156,6 +156,47 @@ export const PAGEGEN_PAGE_ID_RE = /^[a-z0-9]{10}$/;
 /** 口令连续失败锁定阈值（每 IP 每天） */
 export const PAGEGEN_CODE_FAIL_LOCK = 20;
 
+// ===== 生成口令 =====
+
+/** 口令类型：long（长期限频）/ short（短期限量） */
+export const PAGEGEN_TOKEN_TYPE = {
+  LONG: 'long',
+  SHORT: 'short',
+} as const;
+export type PagegenTokenType =
+  (typeof PAGEGEN_TOKEN_TYPE)[keyof typeof PAGEGEN_TOKEN_TYPE];
+
+export const PAGEGEN_TOKEN_STATUS = {
+  ACTIVE: 'active',
+  DISABLED: 'disabled',
+} as const;
+
+/** 口令码格式：16 位去歧义字符（无 0/O/1/I/l 的大小写字母+数字） */
+export const PAGEGEN_TOKEN_CODE_RE = /^[A-Za-z2-9]{16}$/;
+export const PAGEGEN_TOKEN_CODE_LENGTH = 16;
+
+/** 单设备独占的空闲自动释放窗口（小时），可用 PAGEGEN_DEVICE_RELEASE_HOURS 覆盖 */
+export const PAGEGEN_DEVICE_RELEASE_HOURS = 2;
+
+/** 长期口令每小时条数上限范围 */
+export const PAGEGEN_HOURLY_LIMIT_MIN = 1;
+export const PAGEGEN_HOURLY_LIMIT_MAX = 100;
+/** 短期口令总条数上限范围 */
+export const PAGEGEN_MAX_USES_MIN = 1;
+export const PAGEGEN_MAX_USES_MAX = 1000;
+/** 批量生成口令个数上限 */
+export const PAGEGEN_TOKEN_BATCH_MAX = 50;
+
+/**
+ * 额度/频次的计数口径：pending/generating/done 计入，failed 不扣
+ * （在途占额防并发绕过限制；失败自动退额，对使用者公平）
+ */
+export const PAGEGEN_COUNTED_STATUSES: PagegenStatus[] = [
+  PAGEGEN_STATUS.PENDING,
+  PAGEGEN_STATUS.GENERATING,
+  PAGEGEN_STATUS.DONE,
+];
+
 /**
  * 敏感词硬词表 —— 备案域名下的合规兜底，仅收录硬性违规词。
  * 可通过环境变量 PAGEGEN_SENSITIVE_EXTRA（逗号分隔）追加，无需改代码。

@@ -58,7 +58,7 @@ function suffix(text: string) {
 }
 
 /**
- * 托管页管理 —— 公开 H5 提交生成的 HTML 页面托管在此
+ * 托管页列表 —— 公开 H5 提交生成的 HTML 页面托管在此
  * 顶部统计卡片（今日生成/失败率/费用估算/磁盘占用）+ 列表（提示词查看/跳转/删除）
  */
 
@@ -156,6 +156,17 @@ export default function HostedPages() {
     },
     { title: 'IP', dataIndex: 'ip', width: 130 },
     {
+      title: '口令',
+      dataIndex: 'token',
+      width: 130,
+      ellipsis: true,
+      render: (token: any, record: any) => {
+        if (token) return <Tag color="geekblue">{token.name || '未命名'}</Tag>;
+        if (record.tokenId) return <Tag color="default">已删除口令</Tag>;
+        return <Tag color="purple">管理员</Tag>;
+      },
+    },
+    {
       title: '设备',
       dataIndex: 'deviceType',
       width: 80,
@@ -230,7 +241,7 @@ export default function HostedPages() {
           marginBottom: 16,
         }}
       >
-        <h2 style={{ margin: 0 }}>托管页管理</h2>
+        <h2 style={{ margin: 0 }}>托管页列表</h2>
         <Space>
           <Input.Search
             placeholder="搜索标题"

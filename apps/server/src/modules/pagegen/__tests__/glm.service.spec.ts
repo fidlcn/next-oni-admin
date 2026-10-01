@@ -44,6 +44,22 @@ describe('GlmService 纯函数', () => {
       });
     });
 
+    it('容忍残缺结束符（模型丢掉 --> 的第二个短横线，线上实测格式）', () => {
+      // glm-5.3 曾照抄提示词示例输出了 `}>` 结尾的非法注释
+      const raw =
+        '<!--pagegen:{"title":"林川 · 前端工程师的主页","tags":["code","design","travel"]}>\n<!DOCTYPE html><html></html>';
+      expect(extractMeta(raw)).toEqual({
+        title: '林川 · 前端工程师的主页',
+        tags: ['code', 'design', 'travel'],
+      });
+    });
+
+    it('标题截断到列宽 100（防 Data too long）', () => {
+      const long = '标'.repeat(150);
+      const raw = `<!--pagegen:{"title":"${long}","tags":["code"]}-->`;
+      expect(extractMeta(raw).title).toHaveLength(100);
+    });
+
     it('缺失注释返回空对象', () => {
       expect(extractMeta('<!DOCTYPE html><html></html>')).toEqual({});
     });
