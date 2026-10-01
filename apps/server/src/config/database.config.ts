@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { entities } from '../entities';
 import { CreatePagegenRecord20260930000000 } from '../migrations/20260930000000-CreatePagegenRecord';
 import { AddPagegenDeviceColumns20261001000000 } from '../migrations/20261001000000-AddPagegenDeviceColumns';
+import { CreatePagegenTokenAndRecordTokenColumns20261002000000 } from '../migrations/20261002000000-CreatePagegenTokenAndRecordTokenColumns';
 
 /**
  * 构建数据库连接配置
@@ -23,6 +24,7 @@ export const getDatabaseConfig = (
   migrations: [
     CreatePagegenRecord20260930000000,
     AddPagegenDeviceColumns20261001000000,
+    CreatePagegenTokenAndRecordTokenColumns20261002000000,
   ],
   // 开发环境自动同步表结构，生产环境启动时跑 migration
   synchronize: configService.get<string>('NODE_ENV') !== 'production',

@@ -11,7 +11,11 @@ import {
   MenuUnfoldOutlined,
   FileTextOutlined,
   PictureOutlined,
+  AppstoreOutlined,
+  BarChartOutlined,
   FileDoneOutlined,
+  KeyOutlined,
+  PlusCircleOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/auth';
@@ -73,10 +77,32 @@ export default function AdminLayout() {
           icon: <PictureOutlined />,
           label: '媒体库',
         },
+      ],
+    },
+    {
+      key: 'hosted-pages-group',
+      label: '托管页管理',
+      icon: <AppstoreOutlined />,
+      children: [
+        {
+          key: '/admin/hosted-pages/overview',
+          icon: <BarChartOutlined />,
+          label: '管理概述',
+        },
         {
           key: '/admin/hosted-pages',
           icon: <FileDoneOutlined />,
-          label: '托管页管理',
+          label: '托管页列表',
+        },
+        {
+          key: '/admin/access-tokens/create',
+          icon: <PlusCircleOutlined />,
+          label: '口令生成',
+        },
+        {
+          key: '/admin/access-tokens',
+          icon: <KeyOutlined />,
+          label: '口令列表',
         },
       ],
     },

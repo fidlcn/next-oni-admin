@@ -127,3 +127,40 @@ export function pageUrl(pageId: string): string {
 export function beaconView(pageId: string): void {
   fetch(`${API_BASE}/v1/pagegen/public/view/${pageId}`).catch(() => {});
 }
+
+/**
+ * 本设备唯一标识（localStorage 持久化）—— 口令单设备独占的依据。
+ * crypto.randomUUID 需安全上下文，非安全环境降级为时间+随机数。
+ */
+export function getDeviceId(): string {
+  const KEY = 'pagegen:device';
+  let id = localStorage.getItem(KEY);
+  if (!id) {
+    id =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
+/** /g 邀请页的口令信息（有效性 + 额度） */
+export interface PagegenTokenInfo {
+  valid: boolean;
+  reason?: 'not_found' | 'disabled' | 'exhausted';
+  type?: 'long' | 'short';
+  name?: string;
+  hourlyLimit?: number;
+  maxUses?: number;
+  usedTotal?: number;
+  hourUsed?: number;
+  remainingUses?: number;
+  deviceLocked?: boolean;
+}
+
+export function tokenInfo(code: string): Promise<PagegenTokenInfo> {
+  return api<PagegenTokenInfo>(
+    `/v1/pagegen/token-info/${encodeURIComponent(code)}`,
+  );
+}

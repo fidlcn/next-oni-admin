@@ -6,7 +6,6 @@ import {
   Logger,
   NotFoundException,
   OnModuleInit,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Like, Between } from 'typeorm';
@@ -16,11 +15,13 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 
 import { PagegenRecord } from '../../entities/pagegen-record.entity';
+import { PagegenToken } from '../../entities/pagegen-token.entity';
 import { SubmitPagegenDto } from './dto/submit.dto';
 import {
   AdminListPagegenDto,
   PublicListPagegenDto,
 } from './dto/list-query.dto';
+import { PagegenTokenService } from './pagegen-token.service';
 import { GlmService, pickValidTags } from './services/glm.service';
 import { SanitizeService } from './services/sanitize.service';
 import { parseDeviceMeta } from './device-meta';
@@ -53,6 +54,7 @@ export class PagegenService implements OnModuleInit {
     private glmService: GlmService,
     private sanitizeService: SanitizeService,
     private configService: ConfigService,
+    private tokenService: PagegenTokenService,
   ) {
     // 生成页目录：项目根 pages/（uploads 之外，仅由 nginx /p/ 暴露）
     this.pagesDir = path.join(process.cwd(), 'pages');
@@ -120,7 +122,7 @@ export class PagegenService implements OnModuleInit {
     ip: string,
     userAgent?: string,
   ): Promise<{ pageId: string; status: string }> {
-    // 1. 口令（timingSafeEqual，先查失败锁定）
+    // 1. 口令（双通道：env 管理员口令 / DB 托管口令，先查失败锁定）
     const failKey = `${todayKey()}:${ip}`;
     if ((this.codeFails.get(failKey) || 0) >= PAGEGEN_CODE_FAIL_LOCK) {
       throw new HttpException(
@@ -128,9 +130,9 @@ export class PagegenService implements OnModuleInit {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    this.assertAccessCode(dto.accessCode, failKey);
+    const token = await this.resolveAccessCode(dto.accessCode, failKey);
 
-    // 2. 生成期间锁死重复提交（前端禁用 + 后端强制双保险）
+    // 2. 生成期间锁死重复提交（IP 维度，双通道生效）
     const inflight = await this.repo.count({
       where: {
         ip,
@@ -141,7 +143,17 @@ export class PagegenService implements OnModuleInit {
       throw new BadRequestException('上一页还在生成中，请等待完成后再提交');
     }
 
-    // 3. 敏感词预检（命中直接拒绝，不落库）
+    // 3. 托管口令通道：停用/额度频次 → 口令在途锁 → 单设备独占
+    let tokenId: number | null = null;
+    const deviceId = dto.deviceId?.trim() || `ip:${ip}`;
+    if (token) {
+      await this.tokenService.assertUsable(token);
+      await this.tokenService.assertNoInflight(token);
+      await this.tokenService.bindDevice(token, deviceId);
+      tokenId = token.id;
+    }
+
+    // 4. 敏感词预检（命中直接拒绝，不落库）
     const sensitive = SanitizeService.findSensitiveWord(
       `${dto.title}\n${dto.content}`,
       this.configService.get<string>('PAGEGEN_SENSITIVE_EXTRA', ''),
@@ -153,7 +165,7 @@ export class PagegenService implements OnModuleInit {
       );
     }
 
-    // 4. 频控（当日提交量，含失败记录 —— 天然惩罚刷量）
+    // 5. 频控（当日提交量，含失败记录 —— 天然惩罚刷量）
     const start = todayStart();
     const ipLimit = this.configService.get<number>(
       'PAGEGEN_DAILY_IP_LIMIT',
@@ -183,35 +195,60 @@ export class PagegenService implements OnModuleInit {
       );
     }
 
-    // 5. 落库（pageId 撞车重试 3 次），同步记录 UA 解析出的设备特征
-    const record = await this.createRecord(dto, ip, userAgent);
+    // 6. 落库（pageId 撞车重试 3 次），同步记录 UA 解析出的设备特征与口令关联
+    const record = await this.createRecord(
+      dto,
+      ip,
+      userAgent,
+      tokenId,
+      deviceId,
+    );
 
-    // 6. 入队异步生成，立即返回
+    // 7. 入队异步生成，立即返回
     this.enqueue(record.id);
 
     return { pageId: record.pageId, status: record.status };
   }
 
-  private assertAccessCode(provided: string, failKey: string): void {
-    const expected = this.configService.get<string>('PAGEGEN_ACCESS_CODE', '');
-    if (!expected) {
-      throw new ServiceUnavailableException('生成服务未配置访问口令');
+  /**
+   * 口令双通道解析：
+   * - 命中 env 管理员口令（timingSafeEqual）→ 返回 null，不受设备锁/额度约束
+   * - 命中 DB 托管口令 → 返回口令实体（可用性在后续链路校验）
+   * - 均未命中 → 计一次失败并抛错
+   */
+  private async resolveAccessCode(
+    provided: string,
+    failKey: string,
+  ): Promise<PagegenToken | null> {
+    const master = this.configService.get<string>('PAGEGEN_ACCESS_CODE', '');
+
+    if (master) {
+      // sha256 等长摘要后 timingSafeEqual，避免长度泄露
+      const a = crypto.createHash('sha256').update(provided).digest();
+      const b = crypto.createHash('sha256').update(master).digest();
+      if (crypto.timingSafeEqual(a, b)) {
+        this.codeFails.delete(failKey);
+        return null;
+      }
     }
-    // sha256 等长摘要后 timingSafeEqual，避免长度泄露
-    const a = crypto.createHash('sha256').update(provided).digest();
-    const b = crypto.createHash('sha256').update(expected).digest();
-    if (!crypto.timingSafeEqual(a, b)) {
-      this.codeFails.set(failKey, (this.codeFails.get(failKey) || 0) + 1);
-      throw new BadRequestException('访问口令不正确');
+
+    const token = await this.tokenService.findByCode(provided.trim());
+    if (token) {
+      // 口令码正确即清零失败计数（停用/超额等在后续链路给出明确文案）
+      this.codeFails.delete(failKey);
+      return token;
     }
-    // 口令正确即清零失败计数
-    this.codeFails.delete(failKey);
+
+    this.codeFails.set(failKey, (this.codeFails.get(failKey) || 0) + 1);
+    throw new BadRequestException('访问口令不正确');
   }
 
   private async createRecord(
     dto: SubmitPagegenDto,
     ip: string,
     userAgent?: string,
+    tokenId: number | null = null,
+    deviceId: string | null = null,
   ): Promise<PagegenRecord> {
     const device = parseDeviceMeta(userAgent);
     for (let i = 0; i < 3; i++) {
@@ -225,6 +262,8 @@ export class PagegenService implements OnModuleInit {
         content: dto.content,
         status: PAGEGEN_STATUS.PENDING,
         ip,
+        tokenId,
+        deviceId,
         ...device,
       });
       try {
@@ -437,14 +476,96 @@ export class PagegenService implements OnModuleInit {
       order: { createdAt: 'DESC' },
     });
 
+    // 附加口令信息：tokenId 为空 = 管理员 env 口令；查不到 = 口令已删除
+    const tokenNames = await this.tokenService.namesFor(
+      list.map((r) => r.tokenId).filter((id): id is number => id != null),
+    );
+
     // 补充访问 URL：生产环境 PAGEGEN_PUBLIC_BASE_URL 配主站绝对地址，
     // 管理端（admin 域名）才能正确跳转到主站 /p/ 路径
     const withUrl = list.map((r) => ({
       ...r,
       url: r.status === PAGEGEN_STATUS.DONE ? this.publicUrl(r.pageId) : null,
+      token: r.tokenId ? (tokenNames.get(r.tokenId) ?? null) : null,
     }));
 
     return { list: withUrl, total, page, pageSize };
+  }
+
+  /** 管理端概述页：GLM 并发 / 今日概况 / 最近生成 / 口令用量 */
+  async overview() {
+    const start = todayStart();
+    const [
+      generating,
+      pending,
+      todayCount,
+      todayFailed,
+      totalCount,
+      totalFailed,
+    ] = await Promise.all([
+      this.repo.count({ where: { status: PAGEGEN_STATUS.GENERATING } }),
+      this.repo.count({ where: { status: PAGEGEN_STATUS.PENDING } }),
+      this.repo.count({ where: { createdAt: Between(start, new Date()) } }),
+      this.repo.count({
+        where: {
+          status: PAGEGEN_STATUS.FAILED,
+          createdAt: Between(start, new Date()),
+        },
+      }),
+      this.repo.count(),
+      this.repo.count({ where: { status: PAGEGEN_STATUS.FAILED } }),
+    ]);
+
+    const sums = await this.repo
+      .createQueryBuilder('r')
+      .select('COALESCE(SUM(r.tokens_in), 0)', 'tokensIn')
+      .addSelect('COALESCE(SUM(r.tokens_out), 0)', 'tokensOut')
+      .getRawOne();
+    const tokensIn = Number(sums?.tokensIn || 0);
+    const tokensOut = Number(sums?.tokensOut || 0);
+    const priceIn = this.configService.get<number>('GLM_PRICE_IN', 8);
+    const priceOut = this.configService.get<number>('GLM_PRICE_OUT', 28);
+    const cost = (tokensIn * priceIn + tokensOut * priceOut) / 1_000_000;
+
+    // 最近生成（含口令名与耗时）
+    const recent = await this.repo.find({
+      order: { createdAt: 'DESC' },
+      take: 10,
+    });
+    const recentNames = await this.tokenService.namesFor(
+      recent.map((r) => r.tokenId).filter((id): id is number => id != null),
+    );
+    const recentRows = recent.map((r) => ({
+      id: r.id,
+      pageId: r.pageId,
+      title: r.title,
+      status: r.status,
+      ip: r.ip,
+      tokenName: r.tokenId
+        ? (recentNames.get(r.tokenId)?.name ?? '已删除口令')
+        : '管理员',
+      url: r.status === PAGEGEN_STATUS.DONE ? this.publicUrl(r.pageId) : null,
+      createdAt: r.createdAt,
+      durationMs:
+        r.status === PAGEGEN_STATUS.DONE || r.status === PAGEGEN_STATUS.FAILED
+          ? new Date(r.updatedAt).getTime() - new Date(r.createdAt).getTime()
+          : null,
+    }));
+
+    return {
+      running: { generating, pending },
+      today: { count: todayCount, failed: todayFailed },
+      totals: {
+        totalCount,
+        totalFailed,
+        tokensIn,
+        tokensOut,
+        cost: Math.round(cost * 10000) / 10000,
+      },
+      recent: recentRows,
+      tokens: await this.tokenService.usageOverview(),
+      serverTime: Date.now(),
+    };
   }
 
   /** 管理端统计卡片 */
@@ -509,6 +630,9 @@ export class PagegenService implements OnModuleInit {
       order: { createdAt: 'DESC' },
       take: 10000,
     });
+    const tokenNames = await this.tokenService.namesFor(
+      records.map((r) => r.tokenId).filter((id): id is number => id != null),
+    );
 
     const header = [
       'pageId',
@@ -518,6 +642,7 @@ export class PagegenService implements OnModuleInit {
       '状态',
       '生成时间',
       'IP',
+      '口令',
       '设备类型',
       '浏览器',
       '操作系统',
@@ -537,6 +662,9 @@ export class PagegenService implements OnModuleInit {
         r.status,
         new Date(r.createdAt).toISOString(),
         r.ip || '',
+        r.tokenId
+          ? (tokenNames.get(r.tokenId)?.name ?? '已删除口令')
+          : '管理员',
         r.deviceType || '',
         r.browser || '',
         r.os || '',

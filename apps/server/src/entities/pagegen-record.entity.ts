@@ -8,6 +8,7 @@ import { BaseEntity } from './base.entity';
  */
 @Entity('pagegen_records')
 @Index(['ip', 'createdAt'])
+@Index(['tokenId', 'createdAt'])
 export class PagegenRecord extends BaseEntity {
   @Column({
     name: 'page_id',
@@ -44,6 +45,22 @@ export class PagegenRecord extends BaseEntity {
 
   @Column({ length: 64, nullable: true, comment: '生成使用的模型' })
   model: string;
+
+  @Column({
+    name: 'token_id',
+    type: 'int',
+    nullable: true,
+    comment: '使用的口令 ID（null = 管理员 env 口令）',
+  })
+  tokenId: number;
+
+  @Column({
+    name: 'device_id',
+    length: 64,
+    nullable: true,
+    comment: '提交设备 ID（前端 localStorage 持久化）',
+  })
+  deviceId: string;
 
   @Column({
     name: 'tokens_in',

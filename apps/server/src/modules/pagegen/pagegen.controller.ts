@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -15,23 +16,32 @@ import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Response } from 'express';
 
 import { PagegenService } from './pagegen.service';
+import { PagegenTokenService } from './pagegen-token.service';
 import { SubmitPagegenDto } from './dto/submit.dto';
 import {
   AdminListPagegenDto,
   PublicListPagegenDto,
 } from './dto/list-query.dto';
+import {
+  CreatePagegenTokenDto,
+  UpdatePagegenTokenDto,
+  AdminListPagegenTokenDto,
+} from './dto/token.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
 
 /**
  * 托管页生成控制器
- * 公开接口（@Public，口令/频控自管）：submit / status / public/list / public/view
- * 管理接口（JWT）：list / stats / export / delete
+ * 公开接口（@Public，口令/频控自管）：submit / status / public/list / public/view / token-info
+ * 管理接口（JWT）：list / stats / overview / export / delete / tokens CRUD
  */
 @Controller('pagegen')
 @UseGuards(JwtAuthGuard)
 export class PagegenController {
-  constructor(private pagegenService: PagegenService) {}
+  constructor(
+    private pagegenService: PagegenService,
+    private tokenService: PagegenTokenService,
+  ) {}
 
   /** 提交生成任务 —— 公开，口令准入 + 10 次/分钟（ThrottlerGuard 仅在此类公开写接口上局部启用） */
   @Post('submit')
@@ -70,6 +80,15 @@ export class PagegenController {
     return this.pagegenService.incrementViews(pageId);
   }
 
+  /** 口令有效性/额度查询 —— 公开（/g 邀请页），10 次/分钟防探测 */
+  @Get('token-info/:code')
+  @Public()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ medium: { limit: 10, ttl: 60000 } })
+  tokenInfo(@Param('code') code: string) {
+    return this.tokenService.tokenInfo(code);
+  }
+
   /** 管理端列表 */
   @Get('list')
   list(@Query() dto: AdminListPagegenDto) {
@@ -80,6 +99,46 @@ export class PagegenController {
   @Get('stats')
   stats() {
     return this.pagegenService.stats();
+  }
+
+  /** 管理端概述页（GLM 并发 / 今日概况 / 最近生成 / 口令用量） */
+  @Get('overview')
+  overview() {
+    return this.pagegenService.overview();
+  }
+
+  /** 口令列表（含实时用量） */
+  @Get('tokens')
+  tokens(@Query() dto: AdminListPagegenTokenDto) {
+    return this.tokenService.adminList(dto);
+  }
+
+  /** 批量创建口令 */
+  @Post('tokens')
+  createTokens(@Body() dto: CreatePagegenTokenDto, @Req() req: any) {
+    const userId = req.user?.id ?? null;
+    return this.tokenService.create(dto, userId);
+  }
+
+  /** 更新口令（改名 / 启停） */
+  @Patch('tokens/:id')
+  updateToken(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdatePagegenTokenDto,
+  ) {
+    return this.tokenService.update(id, dto);
+  }
+
+  /** 解绑口令占用的设备 */
+  @Post('tokens/:id/unbind')
+  unbindToken(@Param('id', ParseIntPipe) id: number) {
+    return this.tokenService.unbind(id);
+  }
+
+  /** 删除口令 */
+  @Delete('tokens/:id')
+  removeToken(@Param('id', ParseIntPipe) id: number) {
+    return this.tokenService.remove(id);
   }
 
   /** 管理端导出 CSV —— @Res 直写响应（绕过统一 JSON 包装） */

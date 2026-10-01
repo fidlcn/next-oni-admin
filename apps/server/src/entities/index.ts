@@ -9,6 +9,7 @@ import { Media } from './media.entity';
 import { OperationLog } from './operation-log.entity';
 import { Setting } from './setting.entity';
 import { PagegenRecord } from './pagegen-record.entity';
+import { PagegenToken } from './pagegen-token.entity';
 
 // TypeORM 需要的实体数组，用于自动加载所有表
 export const entities = [
@@ -23,6 +24,7 @@ export const entities = [
   OperationLog,
   Setting,
   PagegenRecord,
+  PagegenToken,
 ];
 
 export {
@@ -37,4 +39,5 @@ export {
   OperationLog,
   Setting,
   PagegenRecord,
+  PagegenToken,
 };
