@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 /**
@@ -11,8 +11,24 @@ import { ConfigService } from '@nestjs/config';
  * - 本地开发保持默认 /p（相对路径），由前端 siteUrl() 统一兜底 dev origin
  */
 @Injectable()
-export class SiteUrlService {
+export class SiteUrlService implements OnModuleInit {
+  private readonly logger = new Logger(SiteUrlService.name);
+
   constructor(private configService: ConfigService) {}
+
+  /** 启动自检：生产模式下配了相对地址就大声报警（此时管理端链接会退化成 localhost） */
+  onModuleInit(): void {
+    const base =
+      this.configService.get<string>('PAGEGEN_PUBLIC_BASE_URL', '/p') || '/p';
+    if (process.env.NODE_ENV === 'production' && !/^https?:\/\//i.test(base)) {
+      this.logger.warn(
+        `PAGEGEN_PUBLIC_BASE_URL 当前为 "${base}"（非绝对地址）：托管页/生成页/邀请短链只能是相对路径，` +
+          '管理端会兜底显示为 localhost 开发地址。云上部署请在 apps/server/.env.production ' +
+          '配置 PAGEGEN_PUBLIC_BASE_URL=https://<主站域名>/p 并重启 PM2。' +
+          '（本地 Docker 一体化部署使用 /p 默认值属正常，可忽略本告警）',
+      );
+    }
+  }
 
   /** 主站 origin：剥掉尾斜杠与 /p 路径段 */
   origin(): string {
