@@ -33,7 +33,6 @@ export default function DirectoryBrowser() {
   const fetchList = useCallback(async () => {
     const seq = ++seqRef.current;
     // 请求前置 loading 态（fetchList 由筛选/分页变化经 effect 触发）
-
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -60,7 +59,6 @@ export default function DirectoryBrowser() {
 
   useEffect(() => {
     // 筛选/分页变化即重新加载（fetchList 首步同步置 loading）
-
     fetchList();
   }, [fetchList]);
 

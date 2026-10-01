@@ -95,7 +95,8 @@ export default function GenForm({ inviteCode }: { inviteCode?: string }) {
   const phaseRef = useRef<Phase>('idle');
   phaseRef.current = phase;
 
-  // 恢复本设备的口令与最近生成（localStorage 只能在挂载后读，避免 SSR 水合不一致）
+  // 恢复本设备的口令与最近生成（localStorage 只能在挂载后读，避免 SSR 水合不一致；
+  // effect 内 setState 属既有模式，豁免见 eslint.config.mjs）
   useEffect(() => {
     if (!inviteCode) setAccessCode(localStorage.getItem(CODE_KEY) || '');
 
@@ -136,7 +137,6 @@ export default function GenForm({ inviteCode }: { inviteCode?: string }) {
     if (phase !== 'generating' || !pageId) return;
 
     // 新一轮轮询从 0 计时（轮询生命周期的一部分）
-
     setElapsed(0);
     const tick = setInterval(() => setElapsed((s) => s + 1), 1000);
 

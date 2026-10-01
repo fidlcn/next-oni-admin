@@ -125,7 +125,6 @@ export default function TerminalGate({ onEnter }: { onEnter: () => void }) {
 
   useEffect(() => {
     // run 首步即 setState（终端开演），属"挂载即启动"的一次性初始化
-
     void run();
   }, [run]);
 
