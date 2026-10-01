@@ -12,7 +12,7 @@ import {
   ParseIntPipe,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 
 import { PagegenService } from './pagegen.service';
@@ -43,10 +43,9 @@ export class PagegenController {
     private tokenService: PagegenTokenService,
   ) {}
 
-  /** 提交生成任务 —— 公开，口令准入 + 10 次/分钟（ThrottlerGuard 仅在此类公开写接口上局部启用） */
+  /** 提交生成任务 —— 公开，口令准入 + 10 次/分钟（ThrottlerGuard 已全局注册） */
   @Post('submit')
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({ medium: { limit: 10, ttl: 60000 } })
   submit(@Body() dto: SubmitPagegenDto, @Req() req: any) {
     // nginx 设置 X-Real-IP；直连场景回退 req.ip
@@ -55,9 +54,11 @@ export class PagegenController {
     return this.pagegenService.submit(dto, ip, userAgent);
   }
 
-  /** H5 轮询任务状态 —— 公开（pageId 不可猜测即访问控制） */
+  /** H5 轮询任务状态 —— 公开（pageId 不可猜测即访问控制）。
+   *  单页 3s 轮询 + 「最近生成」批量续轮询，放宽到 240 次/分钟防误伤 */
   @Get('status/:pageId')
   @Public()
+  @Throttle({ medium: { limit: 240, ttl: 60000 } })
   status(@Param('pageId') pageId: string) {
     return this.pagegenService.status(pageId);
   }
@@ -74,7 +75,6 @@ export class PagegenController {
    *  计数无害且幂等，配合限流足够（像素计数器的惯例做法） */
   @Get('public/view/:pageId')
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({ medium: { limit: 60, ttl: 60000 } })
   view(@Param('pageId') pageId: string) {
     return this.pagegenService.incrementViews(pageId);
@@ -83,7 +83,6 @@ export class PagegenController {
   /** 口令有效性/额度查询 —— 公开（/g 邀请页），10 次/分钟防探测 */
   @Get('token-info/:code')
   @Public()
-  @UseGuards(ThrottlerGuard)
   @Throttle({ medium: { limit: 10, ttl: 60000 } })
   tokenInfo(@Param('code') code: string) {
     return this.tokenService.tokenInfo(code);

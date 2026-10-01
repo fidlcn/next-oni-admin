@@ -4,7 +4,7 @@ import {
   UserOutlined,
   FileTextOutlined,
   TeamOutlined,
-  EyeOutlined,
+  FileAddOutlined,
 } from '@ant-design/icons';
 import { getDashboardStats } from '@/services/dashboard';
 
@@ -23,7 +23,7 @@ export default function Dashboard() {
           userCount: 0,
           contentCount: 0,
           roleCount: 0,
-          todayVisits: 0,
+          todayNewContents: 0,
         }),
       )
       .finally(() => setLoading(false));
@@ -71,9 +71,9 @@ export default function Dashboard() {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="今日访问"
-              value={stats?.todayVisits || 0}
-              prefix={<EyeOutlined />}
+              title="今日新增内容"
+              value={stats?.todayNewContents || 0}
+              prefix={<FileAddOutlined />}
             />
           </Card>
         </Col>

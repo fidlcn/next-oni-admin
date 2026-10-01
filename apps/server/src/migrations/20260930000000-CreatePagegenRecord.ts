@@ -6,6 +6,11 @@ import { MigrationInterface, QueryRunner, Table, TableIndex } from 'typeorm';
  */
 export class CreatePagegenRecord20260930000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // 幂等守卫：存量库的表可能已由 synchronize 创建（此前容器以 dev 模式运行）
+    if (await queryRunner.hasTable('pagegen_records')) {
+      return;
+    }
+
     await queryRunner.createTable(
       new Table({
         name: 'pagegen_records',

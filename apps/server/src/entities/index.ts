@@ -6,7 +6,6 @@ import { Menu } from './menu.entity';
 import { Category } from './category.entity';
 import { Content } from './content.entity';
 import { Media } from './media.entity';
-import { OperationLog } from './operation-log.entity';
 import { Setting } from './setting.entity';
 import { PagegenRecord } from './pagegen-record.entity';
 import { PagegenToken } from './pagegen-token.entity';
@@ -21,7 +20,6 @@ export const entities = [
   Category,
   Content,
   Media,
-  OperationLog,
   Setting,
   PagegenRecord,
   PagegenToken,
@@ -36,7 +34,6 @@ export {
   Category,
   Content,
   Media,
-  OperationLog,
   Setting,
   PagegenRecord,
   PagegenToken,

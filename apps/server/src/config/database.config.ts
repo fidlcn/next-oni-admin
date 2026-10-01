@@ -2,6 +2,7 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 
 import { entities } from '../entities';
+import { CreateBaseSchema20260928000000 } from '../migrations/20260928000000-CreateBaseSchema';
 import { CreatePagegenRecord20260930000000 } from '../migrations/20260930000000-CreatePagegenRecord';
 import { AddPagegenDeviceColumns20261001000000 } from '../migrations/20261001000000-AddPagegenDeviceColumns';
 import { CreatePagegenTokenAndRecordTokenColumns20261002000000 } from '../migrations/20261002000000-CreatePagegenTokenAndRecordTokenColumns';
@@ -21,7 +22,9 @@ export const getDatabaseConfig = (
   password: configService.get<string>('DB_PASSWORD', ''),
   database: configService.get<string>('DB_DATABASE', 'next_oni_admin'),
   entities,
+  // 按时间序排列；全部带幂等守卫（存量库由 synchronize 建表、无迁移记录）
   migrations: [
+    CreateBaseSchema20260928000000,
     CreatePagegenRecord20260930000000,
     AddPagegenDeviceColumns20261001000000,
     CreatePagegenTokenAndRecordTokenColumns20261002000000,
