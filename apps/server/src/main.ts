@@ -6,6 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { join } from 'path';
 import cookieParser from 'cookie-parser';
 import { doubleCsrf } from 'csrf-csrf';
+import * as dotenv from 'dotenv';
 
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -54,7 +55,12 @@ export const {
 });
 
 async function bootstrap() {
-  // 生产密钥校验必须最先执行：配置不对直接终止，避免带病上线
+  // 生产密钥校验必须最先执行：配置不对直接终止，避免带病上线。
+  // 注意 ConfigModule 要到 NestFactory.create 阶段才加载 env 文件，
+  // 这里先手动载入同一份文件（不覆盖已有环境变量），校验才能读到 .env.production 里的密钥
+  dotenv.config({
+    path: `.env.${process.env.NODE_ENV || 'development'}`,
+  });
   assertProductionEnv();
 
   const logger = new Logger('Bootstrap');

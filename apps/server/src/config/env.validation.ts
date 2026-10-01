@@ -44,7 +44,8 @@ export function assertProductionEnv(): void {
     const logger = new Logger('EnvValidation');
     logger.error(
       `生产环境配置校验失败，拒绝启动：\n  - ${problems.join('\n  - ')}\n` +
-        '请在 .env 中配置强随机密钥（openssl rand -hex 32）后重新部署',
+        '请在应用目录的 .env.production（PM2 cwd = apps/server）中配置强随机密钥' +
+        '（openssl rand -hex 32 生成）后重新部署',
     );
     process.exit(1);
   }
