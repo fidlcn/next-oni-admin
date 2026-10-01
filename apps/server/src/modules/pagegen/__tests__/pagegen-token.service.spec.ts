@@ -214,6 +214,37 @@ describe('PagegenTokenService', () => {
       expect(info.valid).toBe(true);
       expect(info.remainingUses).toBe(3);
     });
+
+    it('同设备回访不算锁定（绑定本机 → deviceLocked=false）', async () => {
+      tokenRepo.findOneBy.mockResolvedValue(
+        makeToken({ activeDeviceId: 'dev-1', lastUsedAt: new Date() }),
+      );
+      recordRepo.query.mockResolvedValue([usageRow(1, 1)]);
+      const info = await service.tokenInfo('Abc234Def567Gh89', 'dev-1');
+      expect(info.valid).toBe(true);
+      expect(info.deviceLocked).toBe(false);
+      expect(info.isBoundDevice).toBe(true);
+    });
+
+    it('其他设备活跃占用才提示锁定', async () => {
+      tokenRepo.findOneBy.mockResolvedValue(
+        makeToken({ activeDeviceId: 'dev-1', lastUsedAt: new Date() }),
+      );
+      recordRepo.query.mockResolvedValue([usageRow(1, 1)]);
+      const info = await service.tokenInfo('Abc234Def567Gh89', 'dev-2');
+      expect(info.deviceLocked).toBe(true);
+      expect(info.isBoundDevice).toBe(false);
+    });
+
+    it('未带 deviceId 时按任意占用保守返回（管理端语义）', async () => {
+      tokenRepo.findOneBy.mockResolvedValue(
+        makeToken({ activeDeviceId: 'dev-1', lastUsedAt: new Date() }),
+      );
+      recordRepo.query.mockResolvedValue([usageRow(1, 1)]);
+      const info = await service.tokenInfo('Abc234Def567Gh89');
+      expect(info.deviceLocked).toBe(true);
+      expect(info.isBoundDevice).toBe(false);
+    });
   });
 
   describe('create（批量创建与碰撞重试）', () => {

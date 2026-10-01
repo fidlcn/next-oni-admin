@@ -80,12 +80,13 @@ export class PagegenController {
     return this.pagegenService.incrementViews(pageId);
   }
 
-  /** 口令有效性/额度查询 —— 公开（/g 邀请页），10 次/分钟防探测 */
+  /** 口令有效性/额度查询 —— 公开（/g 邀请页），10 次/分钟防探测；
+   *  deviceId 用于把"设备占用"区分为本机/他机，避免同设备回访误报 */
   @Get('token-info/:code')
   @Public()
   @Throttle({ medium: { limit: 10, ttl: 60000 } })
-  tokenInfo(@Param('code') code: string) {
-    return this.tokenService.tokenInfo(code);
+  tokenInfo(@Param('code') code: string, @Query('deviceId') deviceId?: string) {
+    return this.tokenService.tokenInfo(code, deviceId);
   }
 
   /** 管理端列表 */

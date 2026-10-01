@@ -138,6 +138,17 @@ export class PagegenTokenService {
     return Date.now() - last < releaseHours * 60 * 60 * 1000;
   }
 
+  /**
+   * 是否被"其他设备"活跃占用：
+   * - 调用方带 deviceId（/g 邀请页）→ 绑定的是本机就不算锁定
+   * - 未带 deviceId（管理端列表等）→ 按"任意活跃占用"保守返回
+   */
+  private isLockedByOther(token: PagegenToken, deviceId?: string): boolean {
+    if (!token.activeDeviceId) return false;
+    if (deviceId && token.activeDeviceId === deviceId) return false;
+    return this.isDeviceLocked(token);
+  }
+
   // ==================== 管理端 ====================
 
   /** 批量创建口令（随机码唯一键冲突重试 3 次；整体包事务，任一失败全部回滚不留半批） */
@@ -260,8 +271,10 @@ export class PagegenTokenService {
     return tokens.map((t) => this.withUsage(t, usage.get(t.id)!));
   }
 
-  /** /g 邀请页校验口令并展示额度信息（只读，节流防探测） */
-  async tokenInfo(code: string) {
+  /** /g 邀请页校验口令并展示额度信息（只读，节流防探测）。
+   *  传 deviceId 时设备占用按"是否被其他设备占用"计算——绑定本机不算锁定，
+   *  否则同一设备回访也会看到误导性的"正被其他设备使用"提示 */
+  async tokenInfo(code: string, deviceId?: string) {
     const token = code ? await this.findByCode(code.slice(0, 32)) : null;
     if (!token) return { valid: false, reason: 'not_found' };
     if (token.status !== PAGEGEN_TOKEN_STATUS.ACTIVE) {
@@ -284,7 +297,8 @@ export class PagegenTokenService {
       hourUsed: u.hour,
       remainingUses:
         token.type === 'short' ? token.maxUses! - u.total : undefined,
-      deviceLocked: this.isDeviceLocked(token),
+      deviceLocked: this.isLockedByOther(token, deviceId),
+      isBoundDevice: !!deviceId && token.activeDeviceId === deviceId,
     };
   }
 

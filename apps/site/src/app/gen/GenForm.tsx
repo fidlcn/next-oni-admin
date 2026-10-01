@@ -107,7 +107,8 @@ export default function GenForm({ inviteCode }: { inviteCode?: string }) {
   useEffect(() => {
     if (!inviteCode) return;
     let stopped = false;
-    tokenInfo(inviteCode)
+    // 带上本机 deviceId：服务端才能区分"占用者是本机还是他机"，避免误报
+    tokenInfo(inviteCode, getDeviceId())
       .then((info) => {
         if (stopped) return;
         setInvite(
@@ -378,11 +379,15 @@ export default function GenForm({ inviteCode }: { inviteCode?: string }) {
                     每小时最多 {invite.info.hourlyLimit} 条
                   </span>
                 ) : null}
-                {invite.info?.deviceLocked && (
+                {invite.info?.deviceLocked ? (
                   <span className="text-xs text-amber-600">
                     （该口令正被其他设备使用，提交可能被拒绝）
                   </span>
-                )}
+                ) : invite.info?.isBoundDevice ? (
+                  <span className="text-xs text-gray-400">
+                    （口令已绑定当前设备，可直接继续生成）
+                  </span>
+                ) : null}
               </div>
             )}
           </div>

@@ -156,11 +156,18 @@ export interface PagegenTokenInfo {
   usedTotal?: number;
   hourUsed?: number;
   remainingUses?: number;
+  /** 是否被其他设备活跃占用（传了 deviceId 时，绑定本机不算） */
   deviceLocked?: boolean;
+  /** 口令当前绑定的就是本机设备 */
+  isBoundDevice?: boolean;
 }
 
-export function tokenInfo(code: string): Promise<PagegenTokenInfo> {
+export function tokenInfo(
+  code: string,
+  deviceId?: string,
+): Promise<PagegenTokenInfo> {
+  const qs = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
   return api<PagegenTokenInfo>(
-    `/v1/pagegen/token-info/${encodeURIComponent(code)}`,
+    `/v1/pagegen/token-info/${encodeURIComponent(code)}${qs}`,
   );
 }
