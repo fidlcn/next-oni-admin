@@ -38,7 +38,6 @@ next-oni-admin/
 │   ├── server/          # NestJS 后端 API（端口 3000）
 │   ├── web/             # React 管理后台 SPA（Vite 构建）
 │   └── site/            # Next.js 主站 + 博客（端口 3001）
-├── packages/
 │   ├── constants/       # 共享常量（HTTP 状态码、认证、分页）
 │   ├── shared/          # 共享 TypeScript 类型定义
 │   └── utils/           # 共享工具函数
@@ -177,7 +176,7 @@ bash deploy/deploy.sh
 
 1. `deploy/nginx.conf` 已含 `/p/` 块；生成目录 `apps/server/pages/` 需运行用户可写
 2. `PAGEGEN_PUBLIC_BASE_URL` 必须配主站绝对地址（如 `https://www.example.com/p`），管理端跨域跳转依赖它
-3. **云安全组只放行 80/443/22**：3000/3001 对公网开放会被直连伪造 `X-Real-IP` 绕过 per-IP 频控（验收：`curl -I http://服务器IP:3000` 必须超时/拒绝）
+3. **云安全组只放行 80/443/22**：3000/3001 对公网开放会被直连伪造 `X-Real-IP` 绕过 per-IP 频控（docker compose 已将 3000/3001 绑定 127.0.0.1；云上 PM2 部署需配防火墙。验收：`curl -I http://服务器IP:3000` 必须超时/拒绝）
 4. `deploy/backup.sh` 已将 `pages/` 目录纳入每日备份（生成页丢失不可再生）
 5. 验证响应头：`curl -sI https://www.example.com/p/某pageId.html` 应包含 CSP / X-Frame-Options: DENY / X-Robots-Tag: noindex
 
@@ -223,7 +222,6 @@ next-oni-admin/
 │   ├── server/          # NestJS backend API (port 3000)
 │   ├── web/             # React admin panel SPA (Vite build)
 │   └── site/            # Next.js public site + blog (port 3001)
-├── packages/
 │   ├── constants/       # Shared constants (HTTP codes, auth, pagination)
 │   ├── shared/          # Shared TypeScript type definitions
 │   └── utils/           # Shared utility functions
