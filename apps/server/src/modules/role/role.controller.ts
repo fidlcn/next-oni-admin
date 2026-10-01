@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 
 import { RoleService } from './role.service';
+import { CreateRoleDto, UpdateRoleDto } from './dto/role.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/guards/permissions.guard';
@@ -35,12 +36,12 @@ export class RoleController {
   }
 
   @Post()
-  create(@Body() dto: any) {
+  create(@Body() dto: CreateRoleDto) {
     return this.roleService.create(dto);
   }
 
   @Put(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: any) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateRoleDto) {
     return this.roleService.update(id, dto);
   }
 

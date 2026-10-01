@@ -3,7 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like, In } from 'typeorm';
 
 import { Content } from '../../entities/content.entity';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import {
+  QueryContentDto,
+  CreateContentDto,
+  UpdateContentDto,
+} from './dto/content.dto';
 
 /**
  * 内容服务 —— CMS 核心模块，管理文章/页面的增删改查
@@ -17,13 +21,7 @@ export class ContentService {
   ) {}
 
   /** 分页查询内容列表 */
-  async findAll(
-    dto: PaginationDto & {
-      keyword?: string;
-      status?: number;
-      categoryId?: number;
-    },
-  ) {
+  async findAll(dto: QueryContentDto) {
     const { page, pageSize, keyword, status, categoryId } = dto;
     const where: any = {};
 
@@ -56,31 +54,28 @@ export class ContentService {
   }
 
   /** 创建内容 —— 默认为草稿状态 */
-  async create(dto: Partial<Content>, authorId: number) {
+  async create(dto: CreateContentDto, authorId: number) {
     const content = new Content();
-    Object.assign(content, {
-      title: dto.title,
-      content: dto.content,
-      categoryId: dto.categoryId,
-      authorId,
-      cover: dto.cover,
-      status: dto.status ?? 0, // 默认草稿
-      publishedAt: dto.status === 1 ? new Date() : null,
-    });
+    content.title = dto.title;
+    content.content = dto.content;
+    (content as any).categoryId = dto.categoryId ?? null;
+    content.authorId = authorId;
+    (content as any).cover = dto.cover ?? null;
+    content.status = dto.status ?? 0; // 默认草稿
+    (content as any).publishedAt = dto.status === 1 ? new Date() : null;
 
     return this.contentRepo.save(content);
   }
 
   /** 更新内容 —— 草稿发布时自动填充 publishedAt */
-  async update(id: number, dto: Partial<Content>) {
+  async update(id: number, dto: UpdateContentDto) {
     const content = await this.findOne(id);
 
-    Object.assign(content, {
-      title: dto.title,
-      content: dto.content,
-      categoryId: dto.categoryId,
-      cover: dto.cover,
-    });
+    if (dto.title !== undefined) content.title = dto.title;
+    if (dto.content !== undefined) content.content = dto.content;
+    if (dto.categoryId !== undefined)
+      (content as any).categoryId = dto.categoryId;
+    if (dto.cover !== undefined) (content as any).cover = dto.cover;
 
     // 首次发布：从草稿变为已发布时填充发布时间
     if (dto.status === 1 && content.status !== 1) {

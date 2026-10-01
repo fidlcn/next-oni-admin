@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 
 import { MenuService } from './menu.service';
+import { CreateMenuDto, UpdateMenuDto } from './dto/menu.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/guards/permissions.guard';
@@ -43,14 +44,14 @@ export class MenuController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  create(@Body() dto: any) {
+  create(@Body() dto: CreateMenuDto) {
     return this.menuService.create(dto);
   }
 
   @Put(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: any) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateMenuDto) {
     return this.menuService.update(id, dto);
   }
 
