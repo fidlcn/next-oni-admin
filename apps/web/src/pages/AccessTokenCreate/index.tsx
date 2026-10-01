@@ -25,8 +25,9 @@ import {
   type PagegenTokenItem,
 } from '@/services/pagegen';
 
-/** 邀请短链本地开发兜底（后端 PAGEGEN_PUBLIC_BASE_URL 为相对路径时） */
-function absInviteUrl(url: string): string {
+/** 邀请短链本地开发兜底（后端 PAGEGEN_PUBLIC_BASE_URL 为相对路径时）；空值防御 */
+function absInviteUrl(url: string | undefined): string {
+  if (!url) return '';
   if (url.startsWith('http')) return url;
   return `http://localhost:3001${url}`;
 }

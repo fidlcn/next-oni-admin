@@ -139,10 +139,7 @@ export class PagegenTokenService {
   // ==================== 管理端 ====================
 
   /** 批量创建口令（pageId 式随机码，唯一键冲突重试 3 次） */
-  async create(
-    dto: CreatePagegenTokenDto,
-    userId: number,
-  ): Promise<PagegenToken[]> {
+  async create(dto: CreatePagegenTokenDto, userId: number) {
     const count = dto.count ?? 1;
     const created: PagegenToken[] = [];
     for (let i = 0; i < count; i++) {
@@ -171,7 +168,10 @@ export class PagegenTokenService {
     this.logger.log(
       `创建口令 ${created.length} 个 type=${dto.type} name=${dto.name}`,
     );
-    return created;
+    // 新口令用量为零，走 withUsage 补全 inviteUrl/remaining 等字段，
+    // 与列表接口同构（创建页直接展示邀请短链）
+    const zero = { total: 0, today: 0, hour: 0 };
+    return created.map((t) => this.withUsage(t, zero));
   }
 
   /** 管理端口令列表（含实时用量与推导状态） */
