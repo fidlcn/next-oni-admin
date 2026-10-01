@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { PAGEGEN_TAGS, api, pageUrl, beaconView } from '@/lib/pagegen';
 
@@ -27,7 +27,13 @@ export default function DirectoryBrowser() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // 请求序号：快速切换筛选时丢弃过期响应，避免旧结果覆盖新结果（竞态）
+  const seqRef = useRef(0);
+
   const fetchList = useCallback(async () => {
+    const seq = ++seqRef.current;
+    // 请求前置 loading 态（fetchList 由筛选/分页变化经 effect 触发）
+
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -40,17 +46,21 @@ export default function DirectoryBrowser() {
       const data = await api<{ list: DirectoryItem[]; total: number }>(
         `/v1/pagegen/public/list?${params.toString()}`,
       );
+      if (seq !== seqRef.current) return;
       setList(data.list || []);
       setTotal(data.total || 0);
     } catch {
+      if (seq !== seqRef.current) return;
       setList([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (seq === seqRef.current) setLoading(false);
     }
   }, [tag, keyword, sort, page]);
 
   useEffect(() => {
+    // 筛选/分页变化即重新加载（fetchList 首步同步置 loading）
+
     fetchList();
   }, [fetchList]);
 

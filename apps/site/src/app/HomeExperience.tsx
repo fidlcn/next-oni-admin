@@ -21,6 +21,8 @@ export default function HomeExperience() {
     } catch {
       // 隐私模式视为已进入
     }
+    // 客户端一次性初始化（sessionStorage 读取只能在挂载后做）
+
     if (!seen) setSplash(true);
   }, []);
 

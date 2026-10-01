@@ -103,7 +103,7 @@ export const PAGEGEN_STYLES = [
 export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '';
 
 /** 统一处理后端 { code, message, data } 包装 */
-export async function api<T = any>(
+export async function api<T = unknown>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
