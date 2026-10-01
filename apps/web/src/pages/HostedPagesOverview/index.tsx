@@ -26,6 +26,7 @@ import {
   PAGEGEN_TOKEN_TYPE_META,
   PAGEGEN_TOKEN_STATE_META,
 } from '@/services/pagegen';
+import { siteUrl } from '@/utils/siteUrl';
 
 /** tokens 数值紧凑化：12345 -> 1.2万 */
 function formatTokens(n: number): string {
@@ -103,7 +104,7 @@ export default function HostedPagesOverview() {
       ellipsis: true,
       render: (v: string, record: any) =>
         record.url ? (
-          <a href={record.url} target="_blank" rel="noreferrer">
+          <a href={siteUrl(record.url)} target="_blank" rel="noreferrer">
             {v || '（未命名）'}
           </a>
         ) : (

@@ -18,6 +18,7 @@ import {
   UpdatePagegenTokenDto,
   AdminListPagegenTokenDto,
 } from './dto/token.dto';
+import { SiteUrlService } from './site-url.service';
 import {
   PAGEGEN_TOKEN_STATUS,
   PAGEGEN_TOKEN_CODE_LENGTH,
@@ -48,6 +49,7 @@ export class PagegenTokenService {
     @InjectRepository(PagegenRecord)
     private recordRepo: Repository<PagegenRecord>,
     private configService: ConfigService,
+    private siteUrl: SiteUrlService,
   ) {}
 
   // ==================== 提交校验链 ====================
@@ -139,10 +141,7 @@ export class PagegenTokenService {
   // ==================== 管理端 ====================
 
   /** 批量创建口令（pageId 式随机码，唯一键冲突重试 3 次） */
-  async create(
-    dto: CreatePagegenTokenDto,
-    userId: number,
-  ): Promise<PagegenToken[]> {
+  async create(dto: CreatePagegenTokenDto, userId: number) {
     const count = dto.count ?? 1;
     const created: PagegenToken[] = [];
     for (let i = 0; i < count; i++) {
@@ -171,7 +170,10 @@ export class PagegenTokenService {
     this.logger.log(
       `创建口令 ${created.length} 个 type=${dto.type} name=${dto.name}`,
     );
-    return created;
+    // 新口令用量为零，走 withUsage 补全 inviteUrl/remaining 等字段，
+    // 与列表接口同构（创建页直接展示邀请短链）
+    const zero = { total: 0, today: 0, hour: 0 };
+    return created.map((t) => this.withUsage(t, zero));
   }
 
   /** 管理端口令列表（含实时用量与推导状态） */
@@ -281,16 +283,6 @@ export class PagegenTokenService {
 
   // ==================== 工具 ====================
 
-  /** 邀请短链：主站 origin（由 PAGEGEN_PUBLIC_BASE_URL 推导）+ /g/{code} */
-  inviteUrl(code: string): string {
-    const origin = (
-      this.configService.get<string>('PAGEGEN_PUBLIC_BASE_URL', '/p') || '/p'
-    )
-      .replace(/\/+$/, '')
-      .replace(/\/p$/, '');
-    return `${origin}/g/${code}`;
-  }
-
   /** 汇总使用统计：一次 GROUP BY 查出 total / today / hour */
   async usageForIds(ids: number[]): Promise<Map<number, TokenUsage>> {
     const map = new Map(ids.map((id) => [id, { total: 0, today: 0, hour: 0 }]));
@@ -347,7 +339,7 @@ export class PagegenTokenService {
       remaining,
       hourRemaining,
       deviceLocked: this.isDeviceLocked(t),
-      inviteUrl: this.inviteUrl(t.code),
+      inviteUrl: this.siteUrl.inviteUrl(t.code),
       derivedStatus,
     };
   }

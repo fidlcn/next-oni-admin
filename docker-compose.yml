@@ -42,9 +42,12 @@ services:
       # GLM API Key —— 在 .env 里配置；留空则生成功能不可用
       GLM_API_KEY: ${GLM_API_KEY:-}
       GLM_MODEL: glm-5.3
-      # 提交口令（openssl rand -hex 16 生成），在 /gen 表单页输入
+      # 提交口令（openssl rand -hex 16 生成），管理员自用通道
       PAGEGEN_ACCESS_CODE: ${PAGEGEN_ACCESS_CODE}
-      PAGEGEN_PUBLIC_BASE_URL: /p
+      # 托管页/生成页/邀请短链的对外基地址 —— 生产必须在 .env 配主站绝对地址
+      # （如 https://www.fidlcn.site/p），否则管理端跳链只能拿到相对路径；
+      # 本地开发保持默认 /p 即可（前端 siteUrl() 兜底 dev origin）
+      PAGEGEN_PUBLIC_BASE_URL: ${PAGEGEN_PUBLIC_BASE_URL:-/p}
     volumes:
       - uploads:/app/apps/server/uploads
       - rsa-keys:/app/apps/server/keys

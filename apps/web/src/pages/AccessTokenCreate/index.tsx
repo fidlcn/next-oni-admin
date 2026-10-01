@@ -24,12 +24,7 @@ import {
   PAGEGEN_TOKEN_TYPE_META,
   type PagegenTokenItem,
 } from '@/services/pagegen';
-
-/** 邀请短链本地开发兜底（后端 PAGEGEN_PUBLIC_BASE_URL 为相对路径时） */
-function absInviteUrl(url: string): string {
-  if (url.startsWith('http')) return url;
-  return `http://localhost:3001${url}`;
-}
+import { siteUrl } from '@/utils/siteUrl';
 
 async function copyText(text: string, label: string) {
   try {
@@ -77,7 +72,7 @@ export default function AccessTokenCreate() {
         (t) =>
           `${t.name || '未命名'}（${
             PAGEGEN_TOKEN_TYPE_META[t.type]?.label || t.type
-          }）：口令 ${t.code} ｜ 邀请链接 ${absInviteUrl(t.inviteUrl)}`,
+          }）：口令 ${t.code} ｜ 邀请链接 ${siteUrl(t.inviteUrl)}`,
       )
       .join('\n');
     copyText(text, '全部信息');
@@ -129,14 +124,14 @@ export default function AccessTokenCreate() {
       dataIndex: 'inviteUrl',
       render: (v: string) => (
         <Space>
-          <a href={absInviteUrl(v)} target="_blank" rel="noreferrer">
-            {absInviteUrl(v)}
+          <a href={siteUrl(v)} target="_blank" rel="noreferrer">
+            {siteUrl(v)}
           </a>
           <Button
             size="small"
             type="text"
             icon={<CopyOutlined />}
-            onClick={() => copyText(absInviteUrl(v), '邀请短链')}
+            onClick={() => copyText(siteUrl(v), '邀请短链')}
           />
         </Space>
       ),

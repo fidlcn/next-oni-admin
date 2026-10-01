@@ -6,6 +6,7 @@ import { PagegenToken } from '../../entities/pagegen-token.entity';
 import { AuthModule } from '../auth/auth.module';
 import { PagegenService } from './pagegen.service';
 import { PagegenTokenService } from './pagegen-token.service';
+import { SiteUrlService } from './site-url.service';
 import { PagegenController } from './pagegen.controller';
 import { GlmService } from './services/glm.service';
 import { SanitizeService } from './services/sanitize.service';
@@ -20,7 +21,13 @@ import { SanitizeService } from './services/sanitize.service';
     AuthModule,
   ],
   controllers: [PagegenController],
-  providers: [PagegenService, PagegenTokenService, GlmService, SanitizeService],
+  providers: [
+    PagegenService,
+    PagegenTokenService,
+    SiteUrlService,
+    GlmService,
+    SanitizeService,
+  ],
   exports: [PagegenService, PagegenTokenService],
 })
 export class PagegenModule {}

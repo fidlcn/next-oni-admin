@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 import { PagegenTokenService } from '../pagegen-token.service';
+import { SiteUrlService } from '../site-url.service';
 import { PagegenToken } from '../../../entities/pagegen-token.entity';
 
 /** 构造一个口令实体（测试用） */
@@ -47,7 +48,12 @@ describe('PagegenTokenService', () => {
     };
     recordRepo = { count: jest.fn(), query: jest.fn() };
     configService = { get: jest.fn((_key: string, def: any) => def) };
-    service = new PagegenTokenService(tokenRepo, recordRepo, configService);
+    service = new PagegenTokenService(
+      tokenRepo,
+      recordRepo,
+      configService,
+      new SiteUrlService(configService as any),
+    );
   });
 
   describe('assertUsable（额度/频次校验）', () => {
@@ -206,7 +212,7 @@ describe('PagegenTokenService', () => {
   });
 
   describe('create（批量创建与碰撞重试）', () => {
-    it('生成指定数量的口令', async () => {
+    it('生成指定数量的口令（返回与列表同构，含邀请短链）', async () => {
       tokenRepo.save.mockImplementation(async (t: PagegenToken) => t);
       const list = await service.create(
         { name: '给小王的', type: 'short', maxUses: 5, count: 3 } as any,
@@ -217,6 +223,9 @@ describe('PagegenTokenService', () => {
       expect(list[0].type).toBe('short');
       expect(list[0].maxUses).toBe(5);
       expect(list[0].hourlyLimit).toBeNull();
+      // 创建页直接渲染邀请短链 —— 响应缺该字段会导致前端渲染崩溃
+      expect((list[0] as any).inviteUrl).toContain('/g/');
+      expect((list[0] as any).remaining).toBe(5);
     });
 
     it('code 撞车自动重试', async () => {
